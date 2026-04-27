@@ -1,5 +1,7 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
@@ -127,8 +129,17 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        <p className="mt-6 text-sm text-slate-500">
-          🎯 6주 후 베타 출시 · 14일 무료 체험
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <Button
+            asChild
+            size="lg"
+            className="bg-boopick-orange hover:bg-boopick-orange/90 text-white px-8 h-12 text-base"
+          >
+            <Link href="/search">🔎 검색 데모 시작</Link>
+          </Button>
+        </div>
+        <p className="mt-4 text-xs text-slate-500">
+          🎯 데모 매물 10건으로 검색 체험 가능 · 정식 베타는 6주 후
         </p>
       </section>
 

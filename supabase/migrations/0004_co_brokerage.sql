@@ -158,12 +158,14 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists listing_after_ai_processed on listings;
 create trigger listing_after_ai_processed
   after update of ai_embedding on listings
   for each row
   when (new.ai_embedding is not null and (old.ai_embedding is null or old.ai_embedding != new.ai_embedding))
   execute function trigger_match_new_listing();
 
+drop trigger if exists listing_after_insert on listings;
 create trigger listing_after_insert
   after insert on listings
   for each row
@@ -192,6 +194,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists co_brokerage_inquiry_notify on co_brokerage_inquiries;
 create trigger co_brokerage_inquiry_notify
   after insert on co_brokerage_inquiries
   for each row

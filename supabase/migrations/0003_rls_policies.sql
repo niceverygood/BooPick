@@ -11,11 +11,13 @@
 
 -- =====================================================================
 -- helper: 현재 사용자의 agency_id 조회
+-- (Supabase는 auth schema에 사용자 함수 생성을 차단 → public schema에 정의)
 -- =====================================================================
-create or replace function auth.user_agency_id()
+create or replace function public.user_agency_id()
 returns uuid as $$
   select agency_id from public.users where id = auth.uid()
 $$ language sql stable security definer;
+grant execute on function public.user_agency_id() to anon, authenticated, service_role;
 
 -- =====================================================================
 -- agencies
@@ -24,12 +26,12 @@ alter table agencies enable row level security;
 
 create policy "agencies_select_own"
   on agencies for select
-  using (id = auth.user_agency_id());
+  using (id = public.user_agency_id());
 
 create policy "agencies_update_own_admin"
   on agencies for update
   using (
-    id = auth.user_agency_id()
+    id = public.user_agency_id()
     and exists(select 1 from users where id = auth.uid() and role = 'admin')
   );
 
@@ -40,12 +42,12 @@ alter table users enable row level security;
 
 create policy "users_select_same_agency"
   on users for select
-  using (agency_id = auth.user_agency_id());
+  using (agency_id = public.user_agency_id());
 
 create policy "users_insert_self_admin"
   on users for insert
   with check (
-    agency_id = auth.user_agency_id()
+    agency_id = public.user_agency_id()
     and exists(select 1 from users u where u.id = auth.uid() and u.role = 'admin')
   );
 
@@ -54,7 +56,7 @@ create policy "users_update_self_or_admin"
   using (
     id = auth.uid()
     or (
-      agency_id = auth.user_agency_id()
+      agency_id = public.user_agency_id()
       and exists(select 1 from users u where u.id = auth.uid() and u.role = 'admin')
     )
   );
@@ -68,7 +70,7 @@ alter table listings enable row level security;
 create policy "listings_select_own_or_shared"
   on listings for select
   using (
-    agency_id = auth.user_agency_id()
+    agency_id = public.user_agency_id()
     or (
       is_shared = true
       and status = 'active'
@@ -78,17 +80,17 @@ create policy "listings_select_own_or_shared"
 -- INSERT: 내 agency에만 등록 가능
 create policy "listings_insert_own_agency"
   on listings for insert
-  with check (agency_id = auth.user_agency_id());
+  with check (agency_id = public.user_agency_id());
 
 -- UPDATE: 내 매물만
 create policy "listings_update_own"
   on listings for update
-  using (agency_id = auth.user_agency_id());
+  using (agency_id = public.user_agency_id());
 
 -- DELETE: 내 매물만
 create policy "listings_delete_own"
   on listings for delete
-  using (agency_id = auth.user_agency_id());
+  using (agency_id = public.user_agency_id());
 
 -- =====================================================================
 -- VIEW: listings_public (다른 agency가 볼 때 PII 마스킹)
@@ -120,10 +122,10 @@ select
   is_shared,
   contact_method,
   -- PII 마스킹: 등록자 본인이 아니면 NULL
-  case when agency_id = auth.user_agency_id() then landlord_name else null end as landlord_name,
-  case when agency_id = auth.user_agency_id() then landlord_phone else null end as landlord_phone,
-  case when agency_id = auth.user_agency_id() then landlord_note else null end as landlord_note,
-  case when agency_id = auth.user_agency_id() then voice_memos else '[]'::jsonb end as voice_memos,
+  case when agency_id = public.user_agency_id() then landlord_name else null end as landlord_name,
+  case when agency_id = public.user_agency_id() then landlord_phone else null end as landlord_phone,
+  case when agency_id = public.user_agency_id() then landlord_note else null end as landlord_note,
+  case when agency_id = public.user_agency_id() then voice_memos else '[]'::jsonb end as voice_memos,
   status,
   view_count,
   created_at,
@@ -139,8 +141,8 @@ alter table client_requests enable row level security;
 
 create policy "client_requests_all_own_agency"
   on client_requests for all
-  using (agency_id = auth.user_agency_id())
-  with check (agency_id = auth.user_agency_id());
+  using (agency_id = public.user_agency_id())
+  with check (agency_id = public.user_agency_id());
 
 -- =====================================================================
 -- match_notifications
@@ -153,7 +155,7 @@ create policy "match_notif_select_own"
     exists(
       select 1 from client_requests
       where client_requests.id = match_notifications.client_request_id
-        and client_requests.agency_id = auth.user_agency_id()
+        and client_requests.agency_id = public.user_agency_id()
     )
   );
 
@@ -163,7 +165,7 @@ create policy "match_notif_update_own"
     exists(
       select 1 from client_requests
       where client_requests.id = match_notifications.client_request_id
-        and client_requests.agency_id = auth.user_agency_id()
+        and client_requests.agency_id = public.user_agency_id()
     )
   );
 
@@ -175,17 +177,17 @@ alter table co_brokerage_inquiries enable row level security;
 create policy "co_brok_select_either_party"
   on co_brokerage_inquiries for select
   using (
-    inquirer_agency_id = auth.user_agency_id()
-    or listing_owner_agency_id = auth.user_agency_id()
+    inquirer_agency_id = public.user_agency_id()
+    or listing_owner_agency_id = public.user_agency_id()
   );
 
 create policy "co_brok_insert_inquirer"
   on co_brokerage_inquiries for insert
-  with check (inquirer_agency_id = auth.user_agency_id());
+  with check (inquirer_agency_id = public.user_agency_id());
 
 create policy "co_brok_update_owner_response"
   on co_brokerage_inquiries for update
-  using (listing_owner_agency_id = auth.user_agency_id());
+  using (listing_owner_agency_id = public.user_agency_id());
 
 -- =====================================================================
 -- share_card_logs / ad_copies / search_logs
@@ -206,7 +208,7 @@ create policy "ad_copies_own_user"
 
 create policy "search_logs_own_agency"
   on search_logs for select
-  using (agency_id = auth.user_agency_id());
+  using (agency_id = public.user_agency_id());
 
 create policy "search_logs_insert_own_user"
   on search_logs for insert
