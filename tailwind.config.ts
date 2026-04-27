@@ -40,6 +40,12 @@ const config: Config = {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
+  			boopick: {
+  				navy: 'hsl(var(--boopick-navy))',
+  				orange: 'hsl(var(--boopick-orange))',
+  				green: 'hsl(var(--boopick-green))',
+  				cream: 'hsl(var(--boopick-cream))'
+  			},
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
