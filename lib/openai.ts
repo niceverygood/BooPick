@@ -1,13 +1,22 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+// Lazy init — 빌드 타임에 env undefined일 때 모듈 top-level 평가가 throw되지 않도록.
+let _client: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_client) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY 환경변수가 설정되지 않았습니다");
+    }
+    _client = new OpenAI({ apiKey });
+  }
+  return _client;
+}
 
 const EMBEDDING_MODEL = "text-embedding-3-small"; // 1536차원
 
 export async function createEmbedding(text: string): Promise<number[]> {
-  const response = await openai.embeddings.create({
+  const response = await getOpenAI().embeddings.create({
     model: EMBEDDING_MODEL,
     input: text,
     dimensions: 1536,
@@ -24,7 +33,7 @@ export async function createEmbeddingsBatch(
 
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
     const batch = texts.slice(i, i + BATCH_SIZE);
-    const response = await openai.embeddings.create({
+    const response = await getOpenAI().embeddings.create({
       model: EMBEDDING_MODEL,
       input: batch,
       dimensions: 1536,
@@ -36,7 +45,7 @@ export async function createEmbeddingsBatch(
 
 // Whisper STT (F8 음성메모용 — Week 5)
 export async function transcribeAudio(audioFile: File | Blob): Promise<string> {
-  const response = await openai.audio.transcriptions.create({
+  const response = await getOpenAI().audio.transcriptions.create({
     file: audioFile as File,
     model: "whisper-1",
     language: "ko",

@@ -2,9 +2,19 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFile } from "fs/promises";
 import { join } from "path";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+// Lazy init — 빌드 타임에 env undefined인 환경(Vercel "Collecting page data" 등)에서
+// 모듈 top-level 평가만으로 throw되지 않도록.
+let _client: Anthropic | null = null;
+function getAnthropic(): Anthropic {
+  if (!_client) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error("ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다");
+    }
+    _client = new Anthropic({ apiKey });
+  }
+  return _client;
+}
 
 const MODEL = "claude-sonnet-4-6";
 const HAIKU = "claude-haiku-4-5";
@@ -29,7 +39,7 @@ export async function callClaude(
 ): Promise<ClaudeCallResult> {
   const model = opts.useHaiku ? HAIKU : MODEL;
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     model,
     max_tokens: opts.maxTokens ?? 1024,
     system: opts.systemPrompt,

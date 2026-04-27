@@ -1,0 +1,96 @@
+<svg
+  width="1024"
+  height="1024"
+  viewBox="0 0 1024 1024"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-label="부픽 (BooPick) 앱 아이콘"
+>
+  <defs>
+    <!-- 네이비 미세 그라디언트 (위쪽이 살짝 밝음) -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#243C60" />
+      <stop offset="100%" stop-color="#1A2E4C" />
+    </linearGradient>
+
+    <!-- 하단 cream 글로우 (따뜻한 분위기) -->
+    <radialGradient id="creamGlow" cx="50%" cy="100%" r="65%">
+      <stop offset="0%" stop-color="#FFF9F5" stop-opacity="0.18" />
+      <stop offset="60%" stop-color="#FFF9F5" stop-opacity="0.04" />
+      <stop offset="100%" stop-color="#FFF9F5" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- 오렌지 배지 미세 그라디언트 -->
+    <linearGradient id="pickGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF8E61" />
+      <stop offset="100%" stop-color="#FF7849" />
+    </linearGradient>
+
+    <!-- 집 그림자 -->
+    <filter id="houseShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6" />
+      <feOffset dx="0" dy="6" result="off" />
+      <feComponentTransfer><feFuncA type="linear" slope="0.25" /></feComponentTransfer>
+      <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+  </defs>
+
+  <!-- 둥근 사각 배경 (iOS 표준 ~22% radius) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bgGrad)" />
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#creamGlow)" />
+
+  <!-- 집 실루엣 (cream-white, 부드러운 모서리) -->
+  <g filter="url(#houseShadow)">
+    <!-- 지붕 + 본체를 한 path로 -->
+    <path
+      d="
+        M 512 256
+        L 776 472
+        L 776 760
+        Q 776 800 736 800
+        L 288 800
+        Q 248 800 248 760
+        L 248 472
+        Z
+      "
+      fill="#FFFAF3"
+    />
+    <!-- 처마 라인 -->
+    <path
+      d="M 232 480 L 512 252 L 792 480"
+      stroke="#FFFAF3"
+      stroke-width="48"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+  </g>
+
+  <!-- 창문 2개 (네이비) -->
+  <g fill="#1A2E4C">
+    <rect x="332" y="540" width="100" height="100" rx="14" />
+    <rect x="592" y="540" width="100" height="100" rx="14" />
+  </g>
+
+  <!-- 출입구 (오렌지로 포인트 — 카드/매물 선택 의미) -->
+  <rect x="460" y="640" width="104" height="160" rx="14" fill="#FF7849" />
+  <!-- 출입구 안쪽 cream 라인 -->
+  <rect x="486" y="688" width="52" height="100" rx="6" fill="#FFF9F5" opacity="0.18" />
+
+  <!-- 우상단 "Pick" 배지 — 오렌지 원 + 흰 체크 -->
+  <g transform="translate(770 230)">
+    <!-- 외곽 그림자 -->
+    <circle cx="0" cy="0" r="124" fill="#1A2E4C" opacity="0.35" transform="translate(0 8)" />
+    <!-- 본체 -->
+    <circle cx="0" cy="0" r="118" fill="url(#pickGrad)" />
+    <!-- 체크마크 -->
+    <path
+      d="M -50 4 L -14 40 L 56 -38"
+      stroke="#FFFFFF"
+      stroke-width="26"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+  </g>
+</svg>
