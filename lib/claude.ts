@@ -64,20 +64,45 @@ export async function callClaudeJSON<T = unknown>(
 ): Promise<{ data: T; tokens: { input: number; output: number } }> {
   const result = await callClaude({ ...opts, jsonMode: true });
 
-  const cleaned = result.content
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
+  const extracted = extractJSON(result.content);
 
   try {
     return {
-      data: JSON.parse(cleaned) as T,
+      data: JSON.parse(extracted) as T,
       tokens: { input: result.inputTokens, output: result.outputTokens },
     };
   } catch {
-    throw new Error(`Claude JSON 파싱 실패: ${cleaned.slice(0, 200)}`);
+    throw new Error(`Claude JSON 파싱 실패: ${extracted.slice(0, 200)}`);
   }
+}
+
+// LLM이 코드 블록 + 추가 설명을 섞어 응답할 때를 대비한 robust JSON 추출
+// 우선순위: ```json ... ``` 블록 → ``` ... ``` 블록 → 첫 { 부터 균형 맞는 } 까지
+function extractJSON(text: string): string {
+  const fenced =
+    text.match(/```json\s*([\s\S]*?)\s*```/i) ||
+    text.match(/```\s*([\s\S]*?)\s*```/);
+  if (fenced) return fenced[1].trim();
+
+  const start = text.indexOf("{");
+  if (start === -1) return text.trim();
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return text.slice(start).trim();
 }
 
 export type PromptName =
