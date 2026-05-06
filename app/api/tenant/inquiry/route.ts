@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { notifyAgentOfInquiry } from "@/lib/notify";
 
 export const runtime = "nodejs";
 
@@ -127,7 +128,8 @@ export async function POST(req: NextRequest) {
     }
   );
 
-  // 5. 알림은 Step 2에서 — 지금은 큐에 'pending'으로 남겨둠
+  // 5. 중개사 알림 (현재 console.log + notify_status='sent', Phase 2에서 알림톡 연동)
+  void notifyAgentOfInquiry({ inquiry_id: inquiry.id }).catch(() => {});
 
   return NextResponse.json({
     inquiry_id: inquiry.id,
