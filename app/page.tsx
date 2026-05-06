@@ -13,6 +13,7 @@ import {
   type TenantListing,
 } from "@/components/tenant/listing-card";
 import { TrackPageView } from "@/components/tracking/track-page-view";
+import { PWAInstallBanner } from "@/components/tenant/pwa-install-banner";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
@@ -120,6 +121,7 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-boopick-cream">
       <TrackPageView event="landing_view" />
+      <PWAInstallBanner />
       {/* HERO */}
       <section className="px-5 pt-12 pb-10 sm:pt-20 sm:pb-14 max-w-3xl mx-auto text-center">
         <div className="inline-block rounded-3xl shadow-lg overflow-hidden mb-5">

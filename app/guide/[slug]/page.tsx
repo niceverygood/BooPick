@@ -161,7 +161,7 @@ export default async function GuidePage({ params }: PageProps) {
         )}
 
         <div
-          className="mt-8 prose prose-slate prose-sm sm:prose-base max-w-none
+          className="mt-8 prose prose-slate prose-base sm:prose-lg max-w-none
                      prose-headings:text-boopick-navy prose-headings:font-bold
                      prose-h2:mt-8 prose-h2:mb-3
                      prose-strong:text-boopick-navy

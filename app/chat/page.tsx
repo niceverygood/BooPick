@@ -36,8 +36,15 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [history, loading]);
+
+  // 진입 시 chat_start 트래킹
+  useEffect(() => {
+    void import("@/lib/tracking/funnel").then(({ trackEvent }) =>
+      trackEvent("chat_start")
+    );
+  }, []);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -89,7 +96,7 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="min-h-screen bg-boopick-cream flex flex-col">
+    <main className="min-h-screen min-h-[100dvh] bg-boopick-cream flex flex-col">
       <header className="border-b border-slate-200 bg-white sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2">
