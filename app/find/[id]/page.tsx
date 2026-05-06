@@ -12,6 +12,7 @@ import {
   formatKRW,
 } from "@/components/tenant/listing-card";
 import { InquiryButton } from "./inquiry-button";
+import { TrackPageView } from "@/components/tracking/track-page-view";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,6 +126,7 @@ export default async function ListingDetailPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-boopick-cream pb-32 sm:pb-16">
+      <TrackPageView event="listing_view" listingId={listing.listing_id} />
       {/* 헤더 */}
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur sticky top-0 z-20">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">

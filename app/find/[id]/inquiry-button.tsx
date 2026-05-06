@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAnonToken } from "@/lib/tenant/anon";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
+import { trackEvent } from "@/lib/tracking/funnel";
 
 interface Props {
   listingId: string;
@@ -80,6 +81,7 @@ export function InquiryButton({ listingId, shortDescription }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "문의 실패");
 
+      trackEvent("inquiry_submit", { listing_id: listingId });
       setDone(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "문의 실패");
@@ -89,12 +91,13 @@ export function InquiryButton({ listingId, shortDescription }: Props) {
   }
 
   function handleClick() {
-    // click 트래킹
+    // 매물별 클릭 카운터 + funnel 이벤트
     void fetch("/api/tenant/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ listing_id: listingId, event: "click" }),
     }).catch(() => {});
+    trackEvent("inquiry_click", { listing_id: listingId });
     setOpen(true);
   }
 
