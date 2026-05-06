@@ -9,6 +9,7 @@ export interface TenantListing {
   listing_id: string;
   address: string;
   dong: string | null;
+  building_name?: string | null;
   area_pyeong: number | null;
   floor: number | null;
   building_type: string | null;

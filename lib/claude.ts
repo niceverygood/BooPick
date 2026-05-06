@@ -110,7 +110,9 @@ export type PromptName =
   | "tag-listing"
   | "rank-results"
   | "ad-copy"
-  | "voice-summary";
+  | "voice-summary"
+  | "seo-guide"
+  | "tenant-chat";
 
 export async function loadPrompt(name: PromptName): Promise<string> {
   const path = join(process.cwd(), "prompts", `${name}.md`);

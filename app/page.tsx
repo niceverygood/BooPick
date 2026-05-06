@@ -173,6 +173,14 @@ export default async function Home() {
           </div>
         </div>
 
+        {/* 챗봇 진입 */}
+        <Link
+          href="/chat"
+          className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-sm text-slate-600 hover:border-boopick-orange hover:text-boopick-orange transition-colors shadow-sm"
+        >
+          💬 카톡처럼 대화로 찾고 싶다면
+        </Link>
+
         {/* 신뢰 지표 */}
         <div className="mt-10 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-center">
           <Stat label="가입 중개사" value={stats.agencies} />
