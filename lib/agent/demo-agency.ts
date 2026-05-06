@@ -25,6 +25,7 @@ export interface CurrentAgency {
   id: string;
   name: string;
   plan_id: string | null;
+  plan_started_at: string | null;
   trial_plan_id: string | null;
   trial_ends_at: string | null;
   share_pool_opted_in: boolean;
@@ -37,7 +38,7 @@ export async function getCurrentAgency(): Promise<CurrentAgency | null> {
     const { data } = await admin
       .from("agencies")
       .select(
-        "id, name, plan_id, trial_plan_id, trial_ends_at, share_pool_opted_in, business_registration_number"
+        "id, name, plan_id, plan_started_at, trial_plan_id, trial_ends_at, share_pool_opted_in, business_registration_number"
       )
       .eq("name", DEMO_AGENCY_NAME)
       .maybeSingle();
