@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAnonToken } from "@/lib/tenant/anon";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 interface Props {
   listingId: string;
@@ -20,6 +22,7 @@ interface Props {
 }
 
 export function InquiryButton({ listingId, shortDescription }: Props) {
+  const sp = useSearchParams();
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
@@ -27,14 +30,36 @@ export function InquiryButton({ listingId, shortDescription }: Props) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 매물 상세 진입 시 view 트래킹
+  // 매물 상세 진입 시 view 트래킹 + URL ?inquire=1 (OAuth 콜백 후)이면 모달 자동 오픈
   useEffect(() => {
     void fetch("/api/tenant/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ listing_id: listingId, event: "view" }),
     }).catch(() => {});
+
+    if (sp.get("inquire") === "1") {
+      setOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listingId]);
+
+  async function signInWithKakao() {
+    try {
+      const supabase = createBrowserClient();
+      const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
+      const next = `/find/${listingId}?inquire=1`;
+      await supabase.auth.signInWithOAuth({
+        provider: "kakao",
+        options: {
+          redirectTo: `${siteUrl}/auth/callback/tenant?next=${encodeURIComponent(next)}`,
+        },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "카카오 로그인 시작 실패");
+    }
+  }
 
   async function submit() {
     if (submitting) return;
@@ -108,6 +133,35 @@ export function InquiryButton({ listingId, shortDescription }: Props) {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-2">
+                {/* 카카오 빠른 로그인 */}
+                <button
+                  type="button"
+                  onClick={signInWithKakao}
+                  className="w-full h-11 rounded-md bg-[#FEE500] hover:bg-[#FDD835] text-[#191919] text-sm font-bold flex items-center justify-center gap-2"
+                  disabled={submitting}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 18 18"
+                    fill="currentColor"
+                    aria-hidden
+                  >
+                    <path d="M9 1.5C4.582 1.5 1 4.32 1 7.8c0 2.197 1.448 4.124 3.62 5.244-.16.602-.58 2.176-.665 2.516-.105.422.155.418.327.304.135-.09 2.158-1.464 3.04-2.06.546.077 1.106.116 1.678.116 4.418 0 8-2.82 8-6.32S13.418 1.5 9 1.5z" />
+                  </svg>
+                  카카오로 빠른 컨택
+                </button>
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-slate-200" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-white px-2 text-[11px] text-slate-400">
+                      또는 전화번호로
+                    </span>
+                  </div>
+                </div>
+
                 <div>
                   <Label htmlFor="phone" className="text-sm">
                     연락 받을 번호 <span className="text-slate-400">(선택)</span>
