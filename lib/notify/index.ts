@@ -1,114 +1,253 @@
-// 임차인 컨택 발생 시 중개사에게 알림
+// 부픽 V2 알림 추상 레이어
 //
-// V2 Step 2 — 카카오 알림톡은 사업자 비즈채널 발급 필요(Phase 2).
-// 현재는 console.log + Supabase tenant_inquiries.notify_status 업데이트.
+// 사용법:
+//   const result = await sendNotification({
+//     to: { phone: '010-1234-5678', email: 'foo@bar.com' },
+//     template: 'AGENT_NEW_INQUIRY',
+//     vars: { listing_title: '...', tenant_query: '...', dashboard_url: '...' },
+//     fallbackChannels: ['sms', 'email'],
+//   });
 //
-// 추후 알림톡 SDK 연동 시 이 파일만 교체.
+// 채널 우선순위 (자동):
+//   1. kakao_alimtalk (KAKAO_ALIMTALK_API_KEY 있으면 — 추후)
+//   2. sms (SOLAPI_API_KEY 있으면)
+//   3. email (RESEND_API_KEY 있으면)
+//   4. console (모두 미설정 시 — 개발 fallback)
 
 import { createAdminClient } from "@/lib/supabase/server";
+import { renderTemplate } from "./templates";
+import { sendSolapiSMS } from "./sms-solapi";
+import { sendResendEmail } from "./email-resend";
+import type {
+  NotifyChannel,
+  NotifyMessage,
+  NotifyResult,
+  NotifyAttempt,
+} from "./types";
 
-export interface InquiryNotifyPayload {
-  inquiry_id: string;
-}
+export type { NotifyChannel, NotifyMessage, NotifyResult, NotifyAttempt };
 
-interface InquiryDetail {
-  id: string;
-  message: string | null;
-  created_at: string;
-  agency_id: string;
-  agency_name: string | null;
-  listing_id: string;
-  listing_address: string | null;
-  listing_short: string | null;
-  tenant_phone: string | null;
-}
+const DEFAULT_FALLBACK: NotifyChannel[] = [
+  "kakao_alimtalk",
+  "sms",
+  "email",
+  "console",
+];
 
-export type NotifyResult =
-  | { ok: true; channel: "console" | "sms" | "email" | "kakao_alimtalk" }
-  | { ok: false; error: string };
-
-export async function notifyAgentOfInquiry(
-  payload: InquiryNotifyPayload
+export async function sendNotification(
+  msg: NotifyMessage
 ): Promise<NotifyResult> {
+  const channels = msg.fallbackChannels ?? DEFAULT_FALLBACK;
+  const tpl = renderTemplate(msg.template, msg.vars);
+  const attempts: NotifyAttempt[] = [];
+
+  for (const channel of channels) {
+    const startedAt = new Date().toISOString();
+    let result: NotifyResult;
+
+    switch (channel) {
+      case "kakao_alimtalk":
+        // Phase 2 — 비즈센터 알림톡 발급 후 구현
+        if (!process.env.KAKAO_ALIMTALK_API_KEY) {
+          result = {
+            success: false,
+            channel,
+            error: "알림톡 미설정 (Phase 2)",
+          };
+        } else {
+          result = {
+            success: false,
+            channel,
+            error: "알림톡 SDK 미구현 — Phase 2",
+          };
+        }
+        break;
+
+      case "sms":
+        if (!msg.to.phone) {
+          result = {
+            success: false,
+            channel,
+            error: "SMS 발송 — 휴대폰 번호 없음",
+          };
+        } else {
+          result = await sendSolapiSMS({ to: msg.to.phone, text: tpl.sms });
+        }
+        break;
+
+      case "email":
+        if (!msg.to.email || !tpl.email_subject || !tpl.email_html) {
+          result = {
+            success: false,
+            channel,
+            error: "이메일 발송 — 주소/제목/본문 누락",
+          };
+        } else {
+          result = await sendResendEmail({
+            to: msg.to.email,
+            subject: tpl.email_subject,
+            html: tpl.email_html,
+          });
+        }
+        break;
+
+      case "console":
+        console.log(`[notify:${msg.template}]`, {
+          to: msg.to,
+          text: tpl.sms,
+        });
+        result = { success: true, channel };
+        break;
+
+      default:
+        result = { success: false, channel, error: "알 수 없는 채널" };
+    }
+
+    attempts.push({ channel, result, startedAt });
+    if (result.success) return result;
+  }
+
+  return {
+    success: false,
+    channel: attempts[attempts.length - 1]?.channel ?? "console",
+    error: `모든 채널 실패: ${attempts.map((a) => `${a.channel}(${a.result.success ? "ok" : (a.result as { error: string }).error})`).join(" → ")}`,
+  };
+}
+
+// ───────────────────────────────────────────────
+// inquiry 발생 시 중개사·임차인 알림
+// ───────────────────────────────────────────────
+export async function notifyAgentOfInquiry(payload: {
+  inquiry_id: string;
+}): Promise<NotifyResult> {
   let admin;
   try {
     admin = createAdminClient();
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return {
+      success: false,
+      channel: "console",
+      error: e instanceof Error ? e.message : String(e),
+    };
   }
 
-  // inquiry 상세 + 매물·중개사·임차인 정보
   const { data, error } = await admin
     .from("tenant_inquiries")
     .select(
-      `id, message, created_at, agency_id, listing_id,
-       agency:agencies(name),
-       listing:listings(address, short_description),
-       tenant:tenants(phone)`
+      `id, message, agency_id, listing_id,
+       agency:agencies(name, agent_phone, email, notification_consent, kakao_channel_url),
+       listing:listings(short_description, address, dong, area_pyeong, transaction_type, deposit, monthly_rent),
+       tenant:tenants(name, phone, email, notify_consent)`
     )
     .eq("id", payload.inquiry_id)
     .maybeSingle();
 
   if (error || !data) {
-    return { ok: false, error: error?.message ?? "inquiry not found" };
+    return {
+      success: false,
+      channel: "console",
+      error: error?.message ?? "inquiry not found",
+    };
   }
 
-  const detail: InquiryDetail = {
-    id: data.id,
-    message: data.message,
-    created_at: data.created_at,
-    agency_id: data.agency_id,
-    agency_name:
-      ((data.agency as { name?: string } | null) ?? null)?.name ?? null,
-    listing_id: data.listing_id,
-    listing_address:
-      ((data.listing as { address?: string } | null) ?? null)?.address ?? null,
-    listing_short:
-      ((data.listing as { short_description?: string } | null) ?? null)
-        ?.short_description ?? null,
-    tenant_phone:
-      ((data.tenant as { phone?: string } | null) ?? null)?.phone ?? null,
+  const agency =
+    (data.agency as {
+      name?: string;
+      agent_phone?: string;
+      email?: string;
+      notification_consent?: boolean;
+      kakao_channel_url?: string;
+    } | null) ?? null;
+  const listing =
+    (data.listing as {
+      short_description?: string;
+      address?: string;
+      dong?: string;
+      area_pyeong?: number;
+      transaction_type?: string;
+      deposit?: number;
+      monthly_rent?: number;
+    } | null) ?? null;
+  const tenant =
+    (data.tenant as {
+      name?: string;
+      phone?: string;
+      email?: string;
+      notify_consent?: boolean;
+    } | null) ?? null;
+
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://boo-pick-f52g.vercel.app";
+
+  const listingTitle =
+    listing?.short_description ?? listing?.address ?? "매물";
+  const tenantQueryParts = [
+    listing?.dong,
+    listing?.area_pyeong ? `${listing.area_pyeong}평` : null,
+    listing?.transaction_type,
+  ].filter(Boolean);
+
+  // 1. 중개사 알림 (consent 확인)
+  let agentResult: NotifyResult = {
+    success: false,
+    channel: "console",
+    error: "skipped",
   };
-
-  // ────────────────────────────────────────────────
-  // 알림 발송 — 현재는 console.log
-  // ────────────────────────────────────────────────
-  console.log(
-    "[notify] 새 임차인 컨택:",
-    JSON.stringify(
-      {
-        inquiry_id: detail.id,
-        to_agency: detail.agency_name ?? detail.agency_id,
-        listing: detail.listing_short ?? detail.listing_address,
-        tenant_phone: detail.tenant_phone
-          ? maskPhone(detail.tenant_phone)
-          : null,
-        message: detail.message,
+  if (agency?.notification_consent && agency.agent_phone) {
+    agentResult = await sendNotification({
+      to: { phone: agency.agent_phone, email: agency.email ?? null },
+      template: "AGENT_NEW_INQUIRY",
+      vars: {
+        listing_title: listingTitle,
+        tenant_query: tenantQueryParts.join(" · "),
+        tenant_message: data.message ?? "(메시지 없음)",
+        dashboard_url: `${siteUrl}/agent/leads/${data.id}`,
       },
-      null,
-      2
-    )
-  );
+      fallbackChannels: ["sms", "email", "console"],
+    });
+  } else {
+    // 동의 없거나 번호 없음 — console에만 로그
+    agentResult = await sendNotification({
+      to: {},
+      template: "AGENT_NEW_INQUIRY",
+      vars: {
+        listing_title: listingTitle,
+        tenant_query: tenantQueryParts.join(" · "),
+        tenant_message: data.message ?? "",
+        dashboard_url: `${siteUrl}/agent/leads/${data.id}`,
+      },
+      fallbackChannels: ["console"],
+    });
+  }
 
-  // notify_status 업데이트
+  // 2. 임차인 알림 (전화 있을 때만)
+  if (tenant?.phone) {
+    void sendNotification({
+      to: { phone: tenant.phone, email: tenant.email ?? null },
+      template: "TENANT_INQUIRY_SENT",
+      vars: {
+        listing_title: listingTitle,
+        channel_url: agency?.kakao_channel_url ?? siteUrl,
+      },
+      fallbackChannels: ["sms", "email", "console"],
+    }).catch(() => {});
+  }
+
+  // 3. inquiry 테이블에 결과 기록
   await admin
     .from("tenant_inquiries")
     .update({
-      notify_status: "sent",
-      notified_at: new Date().toISOString(),
+      notify_status: agentResult.success ? "sent" : "failed",
+      notification_sent_at: agentResult.success
+        ? new Date().toISOString()
+        : null,
+      notification_channel: agentResult.success ? agentResult.channel : null,
+      notification_cost: agentResult.success
+        ? (agentResult as { cost?: number }).cost ?? null
+        : null,
+      notified_at: agentResult.success ? new Date().toISOString() : null,
     })
-    .eq("id", detail.id);
+    .eq("id", data.id);
 
-  // TODO Step 2 후반:
-  //   - 카카오 알림톡 (사업자 비즈채널 + 사전 승인 템플릿 필요)
-  //   - 이메일 fallback (Resend/SendGrid)
-  //   - SMS fallback (Twilio/NHN Cloud)
-
-  return { ok: true, channel: "console" };
-}
-
-function maskPhone(phone: string): string {
-  const digits = phone.replace(/[^\d]/g, "");
-  if (digits.length < 8) return "****";
-  return digits.slice(0, 3) + "-****-" + digits.slice(-4);
+  return agentResult;
 }
