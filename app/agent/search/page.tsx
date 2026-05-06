@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,10 +48,31 @@ const EXAMPLES = [
 ];
 
 export default function SearchPage() {
-  const [query, setQuery] = useState("");
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-boopick-cream" />}>
+      <SearchInner />
+    </Suspense>
+  );
+}
+
+function SearchInner() {
+  const sp = useSearchParams();
+  const initialQuery = sp.get("q") ?? "";
+  const [query, setQuery] = useState(initialQuery);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoRan = useRef(false);
+
+  // URL ?q= 으로 들어왔을 때 1회 자동 검색
+  useEffect(() => {
+    if (autoRan.current) return;
+    if (initialQuery && initialQuery.trim().length > 0) {
+      autoRan.current = true;
+      runSearch(initialQuery.trim());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
 
   async function runSearch(q: string) {
     setLoading(true);
@@ -104,9 +126,16 @@ export default function SearchPage() {
             <span className="font-bold text-boopick-navy">부픽</span>
           </Link>
           <span className="text-slate-300">·</span>
-          <span className="text-sm text-slate-500">매물 검색</span>
+          <span className="text-sm text-slate-500">중개사 백오피스 · 매물 검색</span>
         </div>
       </header>
+
+      <div className="max-w-3xl mx-auto px-4 pt-4">
+        <div className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+          ℹ️ 이 화면은 <strong>중개사용 내부 검색</strong>입니다. 임차인 검색은{" "}
+          <Link href="/" className="underline text-boopick-orange">홈</Link> 또는 곧 출시될 <code>/find</code>에서.
+        </div>
+      </div>
 
       <div className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
         {/* Search form */}
