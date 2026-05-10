@@ -1,252 +1,208 @@
-# BooPick (부픽) — Claude Code Memory · V2
+# BooPick (부픽) — Claude Code Memory · V3 (분석 SaaS)
 
 > 이 파일은 Claude Code가 매 세션마다 자동으로 읽습니다.
-> **V2 (2026-05-06~) — V1과는 가설이 뒤집혔으니 반드시 끝까지 읽고 작업할 것.**
+> **V3 (2026-05-06~) — 매물 분석 SaaS로 피벗. V1·V2 가설 모두 폐기.**
 
-## 🎯 프로젝트 한 줄 정의 (V2)
+## 🎯 프로젝트 한 줄 정의 (V3)
 
-**부픽은 임차인을 모아서 가입 중개사에게 분배하는 인프라다.**
+**부픽은 공인중개사가 매물 데이터셋(엑셀)을 업로드하면 AI가 조건에 맞는 자리를 분석해 업종별 추천 리포트(PDF)로 출력하는 SaaS다.**
 
-임차인이 자연어로 상가/사무실을 찾으면, 가입 중개사 매물 중 매칭되는 걸 즉시 노출하고, 임차인 컨택을 등록 중개사에게 카톡으로 분배.
+핵심 가치 = **"매물 40,000건을 30초 안에 분석해 업종 맞춤 리포트로 받는다"**.
 
-## 📜 V1 → V2 전환 (2026-05-06)
+## 📜 V1 → V2 → V3 전환 (2026-05-06)
 
-| 축 | V1 (폐기) | V2 (현재) |
-|---|---|---|
-| 메인 사용자 | 중개사 (B2B) | **임차인 (B2C)** + 중개사 백오피스 |
-| 매물 풀 정의 | 공동중개 풀 (다른 중개사도 검색) | **임차인 노출 슬롯** (가로채기 차단 default OFF) |
-| 핵심 가치 | 중개사간 매물 공유 + 양타 | **임차인 acquisition + 분배** |
-| 가격 4단 | 49k/149k/390k/협의 | **99k/299k/990k + 성공보수형 0원** |
-| acquisition | (없음) | SEO 가이드 일 30건 + 카톡봇 + 인스타 자동 생성 |
-| 락인 | (없음) | 4단 락인 (이력/SEO/노출슬롯/검증배지) |
+| 축 | V1 (폐기) | V2 (폐기) | V3 (현재) |
+|---|---|---|---|
+| 메인 사용자 | 중개사 (B2B 공동중개) | 임차인 (B2C 분배) | **공인중개사 (B2B 분석 도구)** |
+| 핵심 가치 | 공동중개 풀 + 양타 | 임차인 acquisition + 카톡 분배 | **데이터셋 → 리포트 PDF** |
+| 데이터 흐름 | 매물 등록·검색 | 임차인 검색 → 컨택 분배 | **xlsx 업로드 → AI 분석 → PDF** |
+| 가격 | 49k/149k/390k | 99k/299k/990k + 성공보수 | **무료(월 3건) / Pro 49,000원** |
+| 마이그레이션 | 0001~0007 | 0008~0011 | **0001_v2_schema (clean reset)** |
+| 락인 | 약 | 임차인 풀 (강) | 약 (1회 리포트성) — Pro 가격 낮춤 |
 
-**V1 코드는 살림** — Next.js + Supabase + Claude/OpenAI + 검색 파이프라인은 그대로. 가설만 갈음.
+**기존 V1·V2 코드 모두 폐기. DB 스키마 reset.** 살린 건:
+- `lib/supabase/{server,client,middleware}.ts` — Supabase 클라이언트
+- `lib/claude.ts`, `lib/openai.ts` — LLM 래퍼
+- `components/ui/*` — shadcn 12개
+- `public/img/*` — 부픽 아이콘 자산
 
 ## 👥 누가 만드나
 
 - 회사: Bottle Inc. (주식회사 바틀)
 - 대표: 한승수
 - 위치: 판교 테크노밸리 스타트업 캠퍼스
-- 베타 데이터: 강남권 1선 중개사무소 1곳 매물 41,658건 (자체/베타 파트너 정리, NDA 익명)
 
-## 🛠 기술 스택 (V1과 동일)
+## 🛠 기술 스택
 
 | 레이어 | 선택 |
 |---|---|
 | Framework | Next.js 14 App Router + TypeScript strict |
-| Styling | Tailwind v3 + shadcn 2.1.8 (default style, slate base) |
-| DB | Supabase Postgres + pgvector + RLS |
-| Auth | Supabase Auth + 카카오 OAuth (임차인 / 중개사 별도) |
-| LLM | Claude Sonnet 4.6 (`claude-sonnet-4-6`) / Haiku 4.5 (`claude-haiku-4-5`) |
-| STT | OpenAI Whisper |
-| Embedding | OpenAI text-embedding-3-small (1536) |
-| 알림 | 인앱 + 이메일 (Phase 1) → 카카오 알림톡 (Phase 2) |
-| 결제 | 카카오페이 또는 토스페이먼츠 (Phase 2) |
+| Styling | Tailwind v3 + shadcn 2.1.8 |
+| DB | Supabase Postgres + RLS |
+| Auth | Supabase Auth (이메일·비밀번호) |
+| LLM | Claude Sonnet 4.6 (자연어 파싱) |
+| 엑셀 | xlsx (sheetjs) |
+| PDF | Puppeteer (headless Chrome) |
+| QR | qrcode |
 | 호스팅 | Vercel + Supabase |
-| SEO | next-sitemap, OG 이미지 자동 생성 |
-| 인스타 | Meta Graph API (Phase 2) |
 
-## 📐 핵심 설계 원칙 (V2)
+## 📐 핵심 설계 원칙
 
-1. **임차인 우선**: 트래픽 90%가 모바일 임차인. 그들의 30초 경험이 부픽 BM의 심장.
-2. **가입 없이 검색까지**: 임차인은 anon_token으로 검색 가능. 컨택 시점에만 카톡 로그인 강제.
-3. **노출 슬롯 = 핵심 자산**: 가입 중개사 매물의 `tenant_pool_enabled`가 부픽 가치 곡선의 단일 지표.
-4. **가로채기 차단**: 다른 중개사 매물은 default 비공개. 옵트인 시점은 가입 중개사 본인이.
-5. **임차인 PII 마스킹**: 중개사가 처음 보는 임차인 정보는 "동/예산/조건"만. 카톡 1:1 딥링크로 우회 컨택.
-6. **acquisition 엔진은 자동화**: 사람 손으로 매일 컨텐츠 못 만든다. SEO+인스타+릴스 봇이 일 30건+.
+1. **데이터셋 단위 격리**: 사용자별 datasets → listings 격리. RLS로 데이터 누수 차단.
+2. **자연어 → 정형 → 분석**: 사용자가 평소 말투로 입력 → Claude로 정형 → 정형 필터 + 업종 가중치 점수.
+3. **업종 특화**: 결혼식장·카페·학원·필라테스 등 업종별 가중치 별도. `lib/industries/*.ts`로 분리.
+4. **Pro = 가성비**: 월 49,000원으로 진입장벽 낮춤. 기능 한계 → 사용량 한계로 차별화.
+5. **PDF가 영업 자료**: 사장님이 임대인·잠재 임차인에게 "이 매물 좋아요" 영업 시 그대로 사용.
 
-## 📁 프로젝트 구조 (V2)
+## 📁 프로젝트 구조 (V3)
 
 ```
 boopick/
 ├── app/
-│   ├── (tenant)                    # 임차인용 — 메인 트래픽
-│   │   ├── page.tsx                # / 랜딩 (Hero + 검색창 + 인기 검색어)
-│   │   ├── find/page.tsx           # /find 검색 결과
-│   │   ├── find/[id]/page.tsx      # /find/[id] 매물 상세 + 카톡 상담 CTA
-│   │   ├── guide/[slug]/page.tsx   # /guide SEO 컨텐츠 (자동 생성)
-│   │   └── chat/page.tsx           # /chat 카톡 스타일 AI 매물 상담
-│   │
-│   ├── agent/                      # 중개사 백오피스
-│   │   ├── page.tsx                # /agent 대시보드
-│   │   ├── search/page.tsx         # 본인 매물 + 동의 풀 자연어 검색 (V1 /search 이동)
-│   │   ├── listings/page.tsx       # 매물 등록·수정
-│   │   ├── leads/page.tsx          # 임차인 inquiry inbox
-│   │   ├── auto-content/page.tsx   # 광고문구 자동 생성
-│   │   ├── analytics/page.tsx      # 노출/클릭/컨택 통계
-│   │   └── billing/page.tsx        # 구독 관리
-│   │
-│   ├── admin/                      # 부픽 운영자
-│   │   ├── leads/page.tsx          # 임차인 풀 모니터링
-│   │   ├── content/page.tsx        # 자동 컨텐츠 모더레이션
-│   │   └── agents/page.tsx         # 가입 중개사 관리
-│   │
-│   ├── test-connection/page.tsx    # 인프라 검증 (V1 유지)
-│   │
-│   └── api/
-│       ├── tenant/
-│       │   ├── search/route.ts     # 임차인 매물 검색 (tenant_pool만)
-│       │   ├── inquiry/route.ts    # 컨택 요청 생성 + 중개사 알림
-│       │   └── track/route.ts      # 노출/클릭 트래킹
-│       ├── agent/
-│       │   ├── search/route.ts     # V1 /api/search 이동 (본인+동의풀)
-│       │   ├── listings/...        # 매물 CRUD
-│       │   └── leads/...           # inquiry 관리
-│       ├── admin/
-│       │   ├── seed/route.ts       # 데모 매물 시드
-│       │   └── content/cron/...    # SEO 가이드 자동 생성 cron
-│       ├── kakao/
-│       │   ├── tenant-auth/        # 임차인 카카오 OAuth
-│       │   └── agent-auth/         # 중개사 카카오 OAuth
-│       └── search/parse/route.ts   # 자연어 → 정형 (V1 유지)
+│   ├── (marketing)/                    # 공개 (랜딩·가격)
+│   │   ├── layout.tsx
+│   │   ├── page.tsx                    # / 랜딩
+│   │   └── pricing/page.tsx            # /pricing
+│   ├── (auth)/                         # 인증 (로그인·회원가입)
+│   │   ├── layout.tsx
+│   │   ├── login/page.tsx              # /login
+│   │   └── signup/page.tsx             # /signup
+│   ├── (dashboard)/                    # 인증 후 화면
+│   │   ├── layout.tsx                  # 사이드 네비
+│   │   └── dashboard/
+│   │       ├── page.tsx                # 홈 (데이터셋 + 리포트 목록)
+│   │       ├── upload/page.tsx         # xlsx 업로드
+│   │       ├── search/page.tsx         # 자연어 검색·분석
+│   │       └── reports/
+│   │           ├── page.tsx            # 리포트 목록
+│   │           └── [id]/page.tsx       # 리포트 상세 + PDF 다운로드
+│   ├── api/
+│   │   ├── upload/route.ts             # POST: xlsx → datasets + listings
+│   │   ├── parse-query/route.ts        # POST: 자연어 → 정형 (Claude)
+│   │   ├── search/route.ts             # POST: 검색 + 스코어링
+│   │   └── generate-pdf/route.ts       # POST: PDF 생성 + Storage 업로드 + reports row
+│   ├── layout.tsx                      # 루트 레이아웃 (Inter 폰트, ko)
+│   ├── globals.css                     # Tailwind + 부픽 컬러
+│   └── sitemap.ts
 │
 ├── components/
-│   ├── tenant/                     # 임차인용 카드/필터
-│   ├── agent/                      # 중개사용 폼/테이블
-│   └── ui/                         # shadcn
+│   ├── ui/                             # shadcn (button, card, badge, ...)
+│   ├── upload-dropzone.tsx             # xlsx 드래그&드롭
+│   ├── query-input.tsx                 # 검색 입력 + 결과 통합
+│   ├── parsed-conditions.tsx           # AI 파싱 결과 뱃지 표시
+│   ├── results-table.tsx               # 매물 결과 테이블
+│   └── industry-selector.tsx           # 업종 선택 chips
 │
 ├── lib/
-│   ├── claude.ts / openai.ts       # V1 그대로
-│   ├── supabase/                   # V1 그대로 (server/client/middleware/admin)
-│   ├── search/parse-query.ts       # V1 그대로
-│   ├── tagging/extract-tags.ts     # V1 그대로
-│   ├── tenant/                     # 신규: anon_token 추적, inquiry 분배
-│   ├── content/                    # 신규: SEO 가이드 자동 생성
-│   ├── notify/                     # 신규: 카톡/SMS/이메일 알림
-│   └── seed/demo-listings.ts       # V1 그대로
-│
-├── prompts/
-│   ├── parse-query.md / tag-listing.md / rank-results.md   # V1
-│   ├── tenant-chat.md              # 신규: 카톡 챗봇 대화
-│   ├── seo-guide.md                # 신규: SEO 가이드 자동 작성
-│   └── ad-copy.md                  # 신규: 광고문구 (멀티 채널)
-│
-├── scripts/
-│   └── import-listings-xlsx.ts     # V1 그대로 (학습용 41k 데이터 임포트)
+│   ├── supabase/{server,client,middleware,database.types}.ts
+│   ├── claude.ts                       # Claude API 래퍼
+│   ├── openai.ts                       # (현재 미사용 — V3에선 임베딩 X)
+│   ├── excel-parser.ts                 # xlsx → ParsedListing[]
+│   ├── query-parser.ts                 # 자연어 → ParsedCondition (Claude)
+│   ├── scoring.ts                      # 매물별 score + reasons
+│   ├── pdf-generator.ts                # Puppeteer로 HTML → PDF
+│   ├── industries/
+│   │   └── marriage.ts                 # 결혼식장 가중치
+│   └── utils.ts                        # shadcn cn()
 │
 ├── supabase/migrations/
-│   ├── 0001 ~ 0007                 # V1 (그대로)
-│   └── 0008_tenant_side.sql        # V2 — 임차인 측 테이블
+│   └── 0001_v2_schema.sql               # profiles + datasets + listings + reports
 │
-└── docs/
-    ├── FEATURES.md                 # 개발자 기능 설명서
-    └── 사용가이드.md (.docx)       # 사용자 가이드 (V2 톤으로 갱신 예정)
+├── docs/
+│   └── (V1·V2 사용가이드 폐기)
+│
+└── public/img/                         # 부픽 아이콘 (유지)
 ```
 
-## 💾 데이터 모델 — V2 추가분
+## 💾 데이터 모델
 
-기존 V1 9개 테이블 위에 V2 신규:
-- `tenants` — 임차인 (kakao_id 또는 anon_token 추적)
-- `tenant_searches` — 검색 이력 (분석 + acquisition 채널 ROI)
-- `tenant_inquiries` — 임차인 컨택 요청 (분배 핵심 테이블, status: pending/contacted/met/contracted/closed/cancelled)
-- `subscription_plans` — 가격 플랜 (basic/pro/enterprise/success_fee)
-- `listings.tenant_pool_enabled` (boolean) — 임차인 풀 노출 여부
-- `listings.tenant_views/clicks/inquiries_count` — 노출 트래킹
-- `agencies.plan_id` (FK to subscription_plans)
-- `agencies.trial_plan_id`, `trial_ends_at` — 14일 Pro 트라이얼
+`supabase/migrations/0001_v2_schema.sql` 참조.
 
-상세는 `supabase/migrations/0008_tenant_side.sql` 참조.
+| 테이블 | 역할 |
+|---|---|
+| `profiles` | 사용자 (auth.users 연결) — tier, reports_used_month |
+| `datasets` | 사용자가 업로드한 매물 데이터셋 (xlsx 1건 = 1 dataset) |
+| `listings` | 데이터셋 행 (지역·면적·금액·업종·설명 등) |
+| `reports` | 분석 리포트 (query, parsed, selected_listings, pdf_url) |
 
-## 💰 가격 (V2)
+RLS: 모든 테이블에 `auth.uid()` 기반 self 정책.
 
-```ts
-type PlanId = 'basic' | 'pro' | 'enterprise' | 'success_fee';
+## 💰 가격
 
-// monthly_price (KRW), features
-basic        : 99,000  / { tenant_pool: false, ad_copy_daily: 5 }
-pro          : 299,000 / { tenant_pool: true, ad_copy_daily: -1, analytics: true }
-enterprise   : 990,000 / { tenant_pool: true, priority: true, api: true }
-success_fee  : 0       / { tenant_pool: true, fee_rate: 0.07, requires_tracking: true }
-```
+| 플랜 | 월 요금 | 핵심 |
+|---|---|---|
+| **Basic** | 무료 | 월 3건 / 데이터셋 1개 / 업종 4종 |
+| **Pro** | 49,000원 | 무제한 / 데이터셋 무제한 / 업종 20종+ / 워터마크 X / QR 코드 |
 
-베이직은 의도적 미끼 (임차인 풀 OFF). 메인 타겟은 Pro. 신규 진입자는 success_fee로 acquisition.
+베타 기간 모두 무료.
 
-## 🤖 LLM 사용 패턴 (V1 + V2 신규)
+## 🤖 LLM 사용 패턴
 
 | 용도 | 모델 | 위치 |
 |---|---|---|
-| 임차인 쿼리 파싱 | Sonnet 4.6 | parse-query.md |
-| 매물 자동 태깅 | Haiku 4.5 (대량) | tag-listing.md |
-| 매칭 랭킹 + 근거 | Sonnet 4.6 | rank-results.md |
-| 광고문구 멀티채널 | Haiku 4.5 | ad-copy.md (V2) |
-| SEO 가이드 1500~2500자 | Sonnet 4.6 | seo-guide.md (V2) |
-| 카톡 챗봇 대화 | Sonnet 4.6 | tenant-chat.md (V2) |
-| 음성메모 정리 | Sonnet 4.6 | voice-summary.md |
-| STT | Whisper | lib/openai.ts |
+| 자연어 조건 → 정형 JSON | Sonnet 4.6 | `lib/query-parser.ts` |
+| (Phase 2) 매물 추천 사유 생성 | Sonnet 4.6 | TBD |
+| (Phase 2) 컬럼 자동 매핑 (오타·다른 이름 → 표준) | Haiku 4.5 | TBD |
 
-호출 규칙:
-- 모든 LLM 호출은 `lib/claude.ts` / `lib/openai.ts` 래퍼 통해서만
-- 프롬프트는 `prompts/*.md` 파일로 분리
-- 토큰/비용 로그를 모든 호출에서 수집
+## 🔐 보안 & 멀티테넌시
 
-## 🔐 보안 & 멀티테넌시 (V2)
+- **RLS 필수**: 모든 테이블에 `auth.uid() = user_id` 기반 정책
+- **데이터셋 격리**: 사용자가 다른 사용자 매물·리포트 절대 못 봄
+- **Storage**: 리포트 PDF는 `reports/{user_id}/{timestamp}.pdf` 경로 (사용자 폴더 격리)
+- **service_role key**: 서버 사이드만
 
-- **RLS 필수**: 모든 테이블 적용
-- **임차인 PII**: 중개사가 보는 inquiry 첫 화면은 "동/예산/조건"만. 전화·이름은 inquiry status가 'contacted'로 바뀐 후에만
-- **anon_token**: 비로그인 임차인은 cookie의 anon_token으로 추적. 컨택 시점에 카톡 로그인 강제하며 anon_token → kakao_id 병합
-- **subscription_plans**: anon read 허용 (가격 페이지 노출용)
-- **service_role key**: 서버 사이드만, 절대 클라이언트 노출 X
+## ⚠️ 절대 하지 말 것
 
-## ⚠️ 절대 하지 말 것 (V2)
+1. ❌ **다른 사용자 매물 노출** — RLS로 차단되지만 service_role 직접 사용 시 주의
+2. ❌ **PDF에 임대인 PII (전화·이름) 포함** — 광고법·개인정보법
+3. ❌ **광고법 위반** — PDF 하단에 "본 자료는 정보 분석 목적이며 매물번호·등록 중개사 정보는 별도 공식 채널 확인" 명시
+4. ❌ **무단 매물 데이터 가공·재배포** — 사용자 본인 데이터셋만 처리
 
-1. ❌ **41k 강남 매물 데이터를 임차인 검색 결과로 노출** — 출처 정리 안 됐음. **학습/벤치마크/광고문구 LLM 컨텍스트로만 내부 사용**
-2. ❌ **가입 중개사 동의 없이 다른 중개사 매물을 임차인 풀에 노출** — 가로채기 분쟁 즉시
-3. ❌ **임차인 개인정보(전화 등)를 중개사에게 직접 노출** — 카톡 1:1 딥링크 또는 부픽 내 메시지로 우회
-4. ❌ **거래 완료 매물 자동 비활성화 없이 운영** — 14일 미접속 매물 자동 archived
-5. ❌ **광고법 위반** — 모든 매물에 매물번호 / 등록 중개사 / 사업자등록번호 표시 의무
-6. ❌ **카카오톡 알림톡 사전 동의 없이 발송** — 정보통신망법 위반. 회원가입 시 명시적 동의
+## 🚀 V3 로드맵
 
-## 🚀 V2 4주 로드맵
-
-| Step | 기간 | 핵심 |
+| Phase | 기간 | 핵심 |
 |---|---|---|
-| Step 0 | 1일 | V1 정리 (`/search → /agent/search`) + 마이그레이션 0008 (tenants, inquiries, plans) |
-| Step 1 | 1주 | 임차인 진입점 — `/`, `/find`, `/find/[id]`, `/api/tenant/*` |
-| Step 2 | 1주 | 분배 파이프 — 임차인/중개사 카카오 OAuth, 카톡 알림, `/agent/leads` inbox |
-| Step 3 | 1주 | 중개사 백오피스 — `/agent` 대시보드, 매물 CRUD, 광고문구, billing stub |
-| Step 4 | 1주 | 임차인 acquisition 엔진 — SEO 가이드 cron, 카톡 챗봇, 인스타 자동, UTM 추적 |
+| **Phase 1 (현재)** | 1주 | 셋업 + 마이그레이션 + 페이지 골격 + API 골격 |
+| Phase 2 | 1주 | 결혼식장 외 업종 가중치 7종 + AI 추천 사유 생성 |
+| Phase 3 | 1주 | PDF 디자인 고도화 (QR, 워터마크, 차트) + Storage 정책 |
+| Phase 4 | 1주 | 컬럼 자동 매핑 (오타 보정) + 베타 사용자 5명 검증 |
 
-## ✅ Definition of Done
+## ✅ Definition of Done (각 Phase)
 
 - [ ] 코드 작성 + 타입 안전 (TypeScript strict)
-- [ ] 한국어 에러 메시지 (사용자 노출되는 부분)
+- [ ] 한국어 에러 메시지
 - [ ] Supabase RLS 정책 검증
-- [ ] 모바일 우선 (임차인 흐름은 모바일 카톡 진입 가정)
-- [ ] 응답 시간 < 3초 (검색은 캐싱 적극 활용)
-- [ ] 로컬 dev 검증 → push → Vercel 배포 확인까지
+- [ ] 모바일 반응형 (대시보드는 데스크탑 우선이지만 깨지지 않게)
+- [ ] 로컬 dev 검증 → push → Vercel 자동 배포 확인
 
 ## 🎨 UX 가이드라인
 
-- **모바일 우선**: 임차인 90%가 모바일 카톡에서 진입
-- **shadcn/ui 컴포넌트만 사용**: 직접 디자인 X
-- **부픽 브랜드 컬러** (Tailwind utility로 등록):
+- **shadcn/ui 컴포넌트만 사용**
+- **부픽 브랜드 컬러**:
   - `bg-boopick-cream` (배경)
   - `text-boopick-navy` (헤딩)
   - `text-boopick-orange` (액센트·CTA)
-  - `text-boopick-green` (성공/체크)
-- **로딩 UI**: 검색 응답 1~3초. spinner + "AI가 매칭 중..."
-- **임차인 톤**: 친근하고 따뜻하게 ("찾고 있는 자리, 한 줄로 말씀해보세요")
-- **중개사 톤**: 정확하고 효율적 ("오늘 들어온 임차인 N명")
+  - `text-boopick-green` (성공)
+- **사장님 톤**: 정확하고 효율적 ("매물 40,000건을 30초 안에")
 
-## 🎯 Claude Code Working Style (V2)
+## 🎯 Claude Code Working Style (V3)
 
-1. **새 기능 추가 전**: 항상 `supabase/migrations/`에 마이그레이션부터
-2. **LLM 프롬프트**: 인라인 X, `prompts/*.md`로 분리
-3. **타입**: Supabase 타입 자동 생성 추후 (`supabase gen types typescript`)
-4. **테스트**: 핵심 비즈니스 로직(검색/태깅/매칭/inquiry 분배)은 테스트 권장
-5. **커밋 메시지**: `[v2-step1] /find 페이지 구현` 형식
-6. **단계 단위 커밋**: 각 Step의 sub-task별 commit + push + Vercel 배포 확인
+1. **새 기능 추가 전**: 마이그레이션부터 (필요 시 0002, 0003... 추가)
+2. **LLM 프롬프트**: 인라인 X — 길어지면 `prompts/*.md`로 분리
+3. **타입**: Supabase 타입 자동 생성 추후
+4. **커밋 메시지**: `[v3-phase1] 마이그레이션 + 페이지 골격` 형식
+5. **단계 단위 커밋**: 각 Phase의 sub-task별 commit + push
 
 ## 🆘 막힐 때
 
-- 한승수 대표 결정 필요 (BM/가격/데이터 출처): TODO 주석 + 알림
-- 기술 결정 막힘: `docs/decisions/` 폴더에 ADR 작성
+- 한승수 대표 결정 필요 (BM/가격): TODO 주석 + 알림
 - 비대화형 자동 진행: 사용자에게 묻지 말고 합리적 가정으로 진행 후 보고
 
-## 📝 V2 의사결정 기록
+## 📝 V3 의사결정 기록
 
 | 일자 | 결정 |
 |---|---|
-| 2026-05-06 | V1 → V2 가설 전환. 사용자 정의 뒤집기 (중개사 → 임차인). 41k 데이터 = 자체 정리 (A) — 학습 자료로 내부 사용 가능, 임차인 검색 결과 노출 X. |
-| 2026-05-06 | 가격 4단 신규 (99k/299k/990k/성공보수). Pro가 메인 타겟. |
-| 2026-05-06 | 카톡 챗봇/알림톡 다시 메인 경로로. Phase 2가 아니라 V2 Step 2~4의 핵심. |
+| 2026-05-06 | V1·V2 모두 폐기. 매물 분석 SaaS로 피벗. 사장님이 본인 매물 데이터셋 업로드 → AI 분석 → 리포트 PDF. |
+| 2026-05-06 | DB 완전 reset. 0001~0011 마이그레이션 모두 삭제, 0001_v2_schema.sql만 유지. |
+| 2026-05-06 | 가격 무료/49,000원 2단계. 진입장벽 낮춤. |
+| 2026-05-06 | 카카오 OAuth/알림톡/SMS/PWA/funnel 트래킹 모두 제거. 단순 Supabase Auth (이메일/패스워드). |
