@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
+import { DatasetRow } from "@/components/dataset-row";
 
 export const dynamic = "force-dynamic";
 
@@ -126,28 +127,15 @@ export default async function DashboardHome() {
                 업로드된 데이터셋이 없습니다.
               </p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-1">
                 {datasets.map((d) => (
-                  <li
+                  <DatasetRow
                     key={d.id}
-                    className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-slate-50"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-boopick-navy line-clamp-1">
-                        {d.name}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {d.row_count.toLocaleString()}건 ·{" "}
-                        {new Date(d.uploaded_at).toLocaleDateString("ko-KR")}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/dashboard/search?dataset=${d.id}`}
-                      className="text-xs text-boopick-orange hover:underline shrink-0"
-                    >
-                      분석 →
-                    </Link>
-                  </li>
+                    id={d.id}
+                    name={d.name}
+                    rowCount={d.row_count}
+                    uploadedAt={d.uploaded_at}
+                  />
                 ))}
               </ul>
             )}
