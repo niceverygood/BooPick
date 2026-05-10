@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { parseQuery } from "@/lib/query-parser";
 import {
   EMPTY_PARSED,
   type ParsedQuery,
@@ -10,19 +9,24 @@ import {
   postFilter,
   rankListings,
   type ListingRow,
+  type ScoredListing,
 } from "@/lib/scoring";
-import { generateReportPDF } from "@/lib/pdf-generator";
+import { generatePDF, type Tier } from "@/lib/pdf-generator";
+import { parseQuery } from "@/lib/query-parser";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 // POST /api/generate-pdf
-//   body 1: { report_id }                     // 기존 리포트의 PDF 채우기 (권장)
-//   body 2: { dataset_id, query | parsed, industry?, query_raw? }  // 새 분석 + PDF
+//   Phase 4 표준: { report_id }
+//     → reports row의 query_parsed/selected_listings 사용
+//     → PDF 생성 → reports/{user_id}/{report_id}.pdf 업로드
+//     → signed URL (7일) 발급 후 반환
 //
-//   1. report_id 있으면 → reports row에서 query_parsed/selected_listings 로드 → PDF만 생성
-//   2. 없으면 새로 검색·랭킹 + reports insert + PDF 생성
-//   3. tier·월 사용량 체크 (basic 월 3건, report_id 케이스에는 추가 차감 안 함)
+//   호환: { dataset_id, query|parsed, industry?, query_raw? }
+//     → 처음부터 분석 + reports 신규 row 생성
+//
+// 응답: { ok, report_id, pdf_url, file_name, count, tier_used }
 export async function POST(req: NextRequest) {
   const supabase = createClient();
   const {
@@ -39,16 +43,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON 파싱 실패" }, { status: 400 });
   }
 
-  // tier 체크
+  // tier
   const { data: profile } = await supabase
     .from("profiles")
-    .select("tier, reports_used_month")
+    .select("tier, reports_used_month, name")
     .eq("id", user.id)
     .maybeSingle();
-  const tier = (profile?.tier as string) ?? "basic";
-  const used = (profile?.reports_used_month as number) ?? 0;
+  const tier: Tier =
+    ((profile as { tier?: string } | null)?.tier as Tier) ?? "basic";
+  const used = (profile as { reports_used_month?: number } | null)
+    ?.reports_used_month ?? 0;
+  const agentName =
+    (profile as { name?: string } | null)?.name ?? user.email?.split("@")[0] ?? "공인중개사";
 
-  // ───────── 분기 1: 기존 report_id PDF 채우기
+  // ───────── 분기 1: report_id 채우기
   const reportIdInput =
     typeof body.report_id === "string" ? body.report_id : null;
 
@@ -56,28 +64,44 @@ export async function POST(req: NextRequest) {
     const { data: report } = await supabase
       .from("reports")
       .select(
-        "id, user_id, dataset_id, query_raw, query_parsed, industry, selected_listings, pdf_url"
+        "id, user_id, dataset_id, query_raw, query_parsed, industry, selected_listings, pdf_url, tier_used"
       )
       .eq("id", reportIdInput)
       .maybeSingle();
 
-    if (!report) {
+    if (!report)
       return NextResponse.json({ error: "리포트가 없습니다" }, { status: 404 });
-    }
-    if ((report as { user_id: string }).user_id !== user.id) {
+    if ((report as { user_id: string }).user_id !== user.id)
       return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+
+    const r = report as {
+      id: string;
+      query_raw: string;
+      query_parsed: Partial<ParsedQuery> | null;
+      industry: string | null;
+      selected_listings: number[] | null;
+      pdf_url: string | null;
+    };
+
+    // 캐시: 이미 PDF 있으면 signed URL 재발급해서 반환 (한도 차감 X)
+    if (r.pdf_url) {
+      // 기존 path 추출
+      const path = extractStoragePath(r.pdf_url, user.id);
+      if (path) {
+        const signed = await createSignedUrl(supabase, path);
+        if (signed) {
+          return NextResponse.json({
+            ok: true,
+            report_id: r.id,
+            pdf_url: signed,
+            file_name: buildFileName(r.industry, new Date()),
+            cached: true,
+          });
+        }
+      }
     }
 
-    if ((report as { pdf_url: string | null }).pdf_url) {
-      return NextResponse.json({
-        ok: true,
-        report_id: report.id,
-        pdf_url: (report as { pdf_url: string }).pdf_url,
-        cached: true,
-      });
-    }
-
-    // basic 월 3건 한도 (PDF 채우기는 차감 — 한도 신뢰도)
+    // 한도 체크 (basic만)
     if (tier === "basic" && used >= 3) {
       return NextResponse.json(
         {
@@ -88,49 +112,52 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 매물 다시 fetch (selected_listings 기준)
-    const ids = (report as { selected_listings: number[] | null })
-      .selected_listings;
-    if (!ids || ids.length === 0) {
+    if (!r.selected_listings || r.selected_listings.length === 0) {
       return NextResponse.json(
         { error: "선택된 매물이 없습니다" },
         { status: 400 }
       );
     }
+
+    // listings fetch (selected_listings 순서 보존)
     const { data: rows } = await supabase
       .from("listings")
       .select(
         "id, article_no, dataset_id, 지역, 공급_m2, 전용_m2, 공급_평, 전용_평, 해당층, 전체층, 보증금, 월세, 관리비, 현재업종, 추천업종, 간략설명, 설명, 주소, 사용승인일, 중개사무소명"
       )
-      .in("id", ids);
+      .in("id", r.selected_listings);
 
-    const parsed = mergeWithEmpty(
-      ((report as { query_parsed: Partial<ParsedQuery> | null })
-        .query_parsed ?? {}) as Partial<ParsedQuery>
-    );
-    const industry = (report as { industry: string | null }).industry;
-    const ranked = rankListings(
+    const parsed = mergeWithEmpty(r.query_parsed ?? {});
+    const ordered = orderByIds(
       (rows ?? []) as unknown as ListingRow[],
-      parsed,
-      industry,
-      5
+      r.selected_listings
     );
+    const ranked = rankListings(ordered, parsed, r.industry, 5);
 
-    const pdfUrl = await renderAndUpload(
+    const result = await renderUploadAndSign({
       supabase,
-      user.id,
-      ranked,
-      parsed,
-      industry,
-      (report as { query_raw: string }).query_raw
-    );
+      userId: user.id,
+      reportId: r.id,
+      tier,
+      industry: r.industry,
+      query: parsed,
+      queryRaw: r.query_raw,
+      listings: ranked,
+      agentName,
+    });
 
-    if (pdfUrl) {
-      await supabase
-        .from("reports")
-        .update({ pdf_url: pdfUrl })
-        .eq("id", report.id);
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error, detail: result.detail },
+        { status: 500 }
+      );
     }
+
+    // reports update + 사용량 증가 (basic만)
+    await supabase
+      .from("reports")
+      .update({ pdf_url: result.publicPath, tier_used: tier })
+      .eq("id", r.id);
 
     if (tier === "basic") {
       await supabase
@@ -141,13 +168,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      report_id: report.id,
-      pdf_url: pdfUrl,
+      report_id: r.id,
+      pdf_url: result.signedUrl,
+      file_name: buildFileName(r.industry, new Date()),
+      tier_used: tier,
       count: ranked.length,
     });
   }
 
-  // ───────── 분기 2: 처음부터 (legacy)
+  // ───────── 분기 2: 새 분석 + PDF (호환)
   const datasetId =
     typeof body.dataset_id === "string" ? body.dataset_id : null;
   const industry =
@@ -155,13 +184,11 @@ export async function POST(req: NextRequest) {
   const queryRaw =
     typeof body.query_raw === "string"
       ? body.query_raw.trim()
-      : typeof body.query === "string"
-      ? (body.query as string).trim()
       : "";
 
-  if (!datasetId) {
+  if (!datasetId)
     return NextResponse.json({ error: "데이터셋 필요" }, { status: 400 });
-  }
+
   if (tier === "basic" && used >= 3) {
     return NextResponse.json(
       {
@@ -182,7 +209,7 @@ export async function POST(req: NextRequest) {
     parsed = r.parsed;
   } else {
     return NextResponse.json(
-      { error: "조건(query: ParsedQuery)이 필요합니다" },
+      { error: "조건이 필요합니다" },
       { status: 400 }
     );
   }
@@ -208,15 +235,7 @@ export async function POST(req: NextRequest) {
   );
   const ranked = rankListings(candidates, parsed, industry, 5);
 
-  const pdfUrl = await renderAndUpload(
-    supabase,
-    user.id,
-    ranked,
-    parsed,
-    industry,
-    queryRaw
-  );
-
+  // reports row 먼저 (id 확보)
   const { data: report, error: rErr } = await supabase
     .from("reports")
     .insert({
@@ -226,7 +245,7 @@ export async function POST(req: NextRequest) {
       query_parsed: parsed,
       industry: industry ?? parsed.industry,
       selected_listings: ranked.map((r) => r.id),
-      pdf_url: pdfUrl,
+      pdf_url: null,
       tier_used: tier,
     })
     .select("id")
@@ -239,15 +258,43 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const result = await renderUploadAndSign({
+    supabase,
+    userId: user.id,
+    reportId: report.id,
+    tier,
+    industry: industry ?? parsed.industry,
+    query: parsed,
+    queryRaw,
+    listings: ranked,
+    agentName,
+  });
+
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error, detail: result.detail },
+      { status: 500 }
+    );
+  }
+
   await supabase
-    .from("profiles")
-    .update({ reports_used_month: used + 1 })
-    .eq("id", user.id);
+    .from("reports")
+    .update({ pdf_url: result.publicPath })
+    .eq("id", report.id);
+
+  if (tier === "basic") {
+    await supabase
+      .from("profiles")
+      .update({ reports_used_month: used + 1 })
+      .eq("id", user.id);
+  }
 
   return NextResponse.json({
     ok: true,
     report_id: report.id,
-    pdf_url: pdfUrl,
+    pdf_url: result.signedUrl,
+    file_name: buildFileName(industry, new Date()),
+    tier_used: tier,
     count: ranked.length,
   });
 }
@@ -257,41 +304,89 @@ export async function POST(req: NextRequest) {
 
 type AnySupabase = ReturnType<typeof createClient>;
 
-async function renderAndUpload(
-  supabase: AnySupabase,
-  userId: string,
-  ranked: ReturnType<typeof rankListings>,
-  parsed: ParsedQuery,
-  industry: string | null,
-  queryRaw: string
-): Promise<string | null> {
+interface RenderArgs {
+  supabase: AnySupabase;
+  userId: string;
+  reportId: string;
+  tier: Tier;
+  industry: string | null;
+  query: ParsedQuery;
+  queryRaw: string;
+  listings: ScoredListing[];
+  agentName: string;
+}
+
+interface RenderResult {
+  ok: boolean;
+  signedUrl?: string;
+  publicPath?: string;
+  error?: string;
+  detail?: string;
+}
+
+async function renderUploadAndSign(a: RenderArgs): Promise<RenderResult> {
   try {
-    const buf = await generateReportPDF({
-      title: `${industry ?? parsed.industry ?? "매물"} 분석 리포트`,
-      query: queryRaw || "(자동 생성)",
-      industry: industry ?? parsed.industry,
-      listings: ranked,
-      generatedAt: new Date(),
+    const buf = await generatePDF({
+      title: buildPDFTitle(a.industry),
+      date: new Date(),
+      industry: a.industry,
+      tier: a.tier,
+      query: a.query,
+      query_raw: a.queryRaw,
+      listings: a.listings,
+      agent_name: a.agentName,
     });
 
-    const path = `${userId}/${Date.now()}.pdf`;
-    const { error: upErr } = await supabase.storage
+    const path = `${a.userId}/${a.reportId}.pdf`;
+    const { error: upErr } = await a.supabase.storage
       .from("reports")
       .upload(path, buf, {
         contentType: "application/pdf",
-        upsert: false,
+        upsert: true,
       });
-
     if (upErr) {
-      console.error("[pdf] storage upload error:", upErr.message);
-      return null;
+      return { ok: false, error: "Storage 업로드 실패", detail: upErr.message };
     }
-    const { data } = supabase.storage.from("reports").getPublicUrl(path);
-    return data.publicUrl;
+
+    const signed = await createSignedUrl(a.supabase, path);
+    if (!signed) {
+      return { ok: false, error: "Signed URL 생성 실패" };
+    }
+
+    return { ok: true, signedUrl: signed, publicPath: path };
   } catch (e) {
-    console.error("[pdf] generation error:", e);
+    console.error("[pdf] generate error:", e);
+    return {
+      ok: false,
+      error: "PDF 생성 실패",
+      detail: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+async function createSignedUrl(
+  supabase: AnySupabase,
+  path: string
+): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from("reports")
+    .createSignedUrl(path, 60 * 60 * 24 * 7); // 7 days
+  if (error || !data) {
+    console.error("[pdf] signed url error:", error?.message);
     return null;
   }
+  return data.signedUrl;
+}
+
+// pdf_url 컬럼에 저장된 path/URL에서 실제 storage path 추출
+function extractStoragePath(stored: string, userId: string): string | null {
+  // 신규: "user_id/uuid.pdf"
+  if (stored.startsWith(`${userId}/`)) return stored;
+
+  // 레거시: signed URL or public URL — userId/...pdf 부분 추출
+  const m = stored.match(/reports\/([^?#]+\.pdf)/);
+  if (m && m[1].startsWith(`${userId}/`)) return m[1];
+  return null;
 }
 
 function mergeWithEmpty(p: Partial<ParsedQuery>): ParsedQuery {
@@ -299,11 +394,32 @@ function mergeWithEmpty(p: Partial<ParsedQuery>): ParsedQuery {
     ...EMPTY_PARSED,
     ...p,
     regions: Array.isArray(p.regions) ? p.regions : [],
-    exclude_regions: Array.isArray(p.exclude_regions) ? p.exclude_regions : [],
+    exclude_regions: Array.isArray(p.exclude_regions)
+      ? p.exclude_regions
+      : [],
     additional_notes: Array.isArray(p.additional_notes)
       ? p.additional_notes
       : [],
     area_연층_허용: p.area_연층_허용 === true,
     parking_required: p.parking_required === true,
   };
+}
+
+function orderByIds(rows: ListingRow[], ids: number[]): ListingRow[] {
+  const map = new Map<number, ListingRow>();
+  for (const r of rows) map.set(r.id, r);
+  return ids.map((id) => map.get(id)).filter((x): x is ListingRow => !!x);
+}
+
+function buildPDFTitle(industry: string | null): string {
+  if (industry) return `${industry} 사옥 매물 제안서`;
+  return "사무실 임대 매물 제안서";
+}
+
+function buildFileName(industry: string | null, d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const prefix = industry ?? "매물";
+  return `${prefix}_제안서_${yyyy}-${mm}-${dd}.pdf`;
 }

@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { ParsedConditions } from "./parsed-conditions";
 import { ResultsTable, type ResultRow } from "./results-table";
 import { IndustrySelector } from "./industry-selector";
+import { GenerateReportButton } from "./generate-report-button";
 import { EMPTY_PARSED, type ParsedQuery } from "@/lib/parsed-query-types";
 
 const EXAMPLES = [
@@ -58,7 +59,6 @@ function Inner({ datasets, isPro }: Props) {
   const [datasetTotal, setDatasetTotal] = useState(0);
   const [parsing, setParsing] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -158,37 +158,6 @@ function Inner({ datasets, isPro }: Props) {
       setError(e instanceof Error ? e.message : "검색 실패");
     } finally {
       setSearching(false);
-    }
-  }
-
-  async function handleGeneratePDF() {
-    if (generating) return;
-    setGenerating(true);
-    setError(null);
-    try {
-      // /api/search에서 만든 reports row가 있으면 report_id로 PDF만 채우기.
-      // 없으면 (예외) 처음부터 생성.
-      const payload = reportId
-        ? { report_id: reportId }
-        : {
-            dataset_id: datasetId,
-            query: parsed,
-            query_raw: query,
-            industry,
-          };
-      const res = await fetch("/api/generate-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "PDF 생성 실패");
-      if (typeof data.report_id === "string") setReportId(data.report_id);
-      if (typeof data.pdf_url === "string") setPdfUrl(data.pdf_url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "PDF 생성 실패");
-    } finally {
-      setGenerating(false);
     }
   }
 
@@ -480,30 +449,19 @@ function Inner({ datasets, isPro }: Props) {
                 isPro={isPro}
               />
               <Card>
-                <CardContent className="p-4 sm:p-5 flex items-center gap-3 flex-wrap">
-                  <Button
-                    onClick={handleGeneratePDF}
-                    disabled={generating}
-                    className="bg-boopick-orange hover:bg-boopick-orange/90 text-white"
-                  >
-                    {generating ? "PDF 생성 중…" : "📄 PDF 리포트 생성하기 →"}
-                  </Button>
-                  {pdfUrl && (
-                    <a
-                      href={pdfUrl}
-                      target="_blank"
-                      rel="noopener"
-                      className="text-sm text-boopick-orange font-semibold hover:underline"
-                    >
-                      PDF 다운로드 →
-                    </a>
-                  )}
+                <CardContent className="p-5 sm:p-6 space-y-3">
+                  <GenerateReportButton
+                    reportId={reportId}
+                    industry={industry ?? parsed.industry}
+                    tier={isPro ? "pro" : "basic"}
+                    fallbackPdfUrl={pdfUrl}
+                  />
                   {reportId && (
                     <a
                       href={`/dashboard/reports/${reportId}`}
-                      className="text-sm text-slate-500 hover:underline"
+                      className="block text-xs text-slate-500 hover:underline"
                     >
-                      리포트 상세
+                      리포트 상세 페이지 보기 →
                     </a>
                   )}
                 </CardContent>
