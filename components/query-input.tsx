@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ParsedConditions } from "./parsed-conditions";
-import { ResultsTable } from "./results-table";
+import { ResultsTable, type ResultRow } from "./results-table";
 import { IndustrySelector } from "./industry-selector";
 import { EMPTY_PARSED, type ParsedQuery } from "@/lib/parsed-query-types";
 
@@ -27,18 +27,6 @@ interface DatasetOption {
   id: string;
   name: string;
   row_count: number;
-}
-
-interface SearchResult {
-  id: number;
-  지역: string | null;
-  공급_평: number | null;
-  해당층: string | null;
-  보증금: number | null;
-  월세: number | null;
-  추천업종: string | null;
-  score: number;
-  reasons: string[];
 }
 
 interface Props {
@@ -65,12 +53,15 @@ function Inner({ datasets, isPro }: Props) {
   const [query, setQuery] = useState("");
   const [parsed, setParsed] = useState<ParsedQuery>(EMPTY_PARSED);
   const [industry, setIndustry] = useState<string | null>(null);
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<ResultRow[]>([]);
+  const [totalFiltered, setTotalFiltered] = useState(0);
+  const [datasetTotal, setDatasetTotal] = useState(0);
   const [parsing, setParsing] = useState(false);
   const [searching, setSearching] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [parseTokens, setParseTokens] = useState<{ input: number; output: number } | null>(null);
 
   // 첫 번째 데이터셋 자동 선택 (preset 없을 때)
@@ -139,6 +130,7 @@ function Inner({ datasets, isPro }: Props) {
     setSearching(true);
     setError(null);
     setReportId(null);
+    setPdfUrl(null);
 
     try {
       const res = await fetch("/api/search", {
@@ -146,13 +138,21 @@ function Inner({ datasets, isPro }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dataset_id: datasetId,
-          parsed,
+          query: parsed,
+          query_raw: query,
           industry,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "검색 실패");
-      setResults(data.results ?? []);
+      setResults((data.results ?? []) as ResultRow[]);
+      setTotalFiltered(
+        typeof data.total_filtered === "number" ? data.total_filtered : 0
+      );
+      setDatasetTotal(
+        typeof data.dataset_total === "number" ? data.dataset_total : 0
+      );
+      setReportId(typeof data.report_id === "string" ? data.report_id : null);
       setStep(4);
     } catch (e) {
       setError(e instanceof Error ? e.message : "검색 실패");
@@ -166,19 +166,25 @@ function Inner({ datasets, isPro }: Props) {
     setGenerating(true);
     setError(null);
     try {
+      // /api/search에서 만든 reports row가 있으면 report_id로 PDF만 채우기.
+      // 없으면 (예외) 처음부터 생성.
+      const payload = reportId
+        ? { report_id: reportId }
+        : {
+            dataset_id: datasetId,
+            query: parsed,
+            query_raw: query,
+            industry,
+          };
       const res = await fetch("/api/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset_id: datasetId,
-          query,
-          parsed,
-          industry,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "PDF 생성 실패");
-      setReportId(data.report_id);
+      if (typeof data.report_id === "string") setReportId(data.report_id);
+      if (typeof data.pdf_url === "string") setPdfUrl(data.pdf_url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "PDF 생성 실패");
     } finally {
@@ -192,6 +198,9 @@ function Inner({ datasets, isPro }: Props) {
     setParsed(EMPTY_PARSED);
     setResults([]);
     setReportId(null);
+    setPdfUrl(null);
+    setTotalFiltered(0);
+    setDatasetTotal(0);
     setError(null);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("boopick.parsed");
@@ -464,24 +473,41 @@ function Inner({ datasets, isPro }: Props) {
             </Card>
           ) : (
             <>
-              <ResultsTable results={results} />
-              <div className="flex items-center gap-3 flex-wrap">
-                <Button
-                  onClick={handleGeneratePDF}
-                  disabled={generating}
-                  className="bg-boopick-orange hover:bg-boopick-orange/90 text-white"
-                >
-                  {generating ? "PDF 생성 중…" : "📄 PDF 리포트 생성"}
-                </Button>
-                {reportId && (
-                  <a
-                    href={`/dashboard/reports/${reportId}`}
-                    className="text-sm text-boopick-orange font-semibold hover:underline"
+              <ResultsTable
+                results={results}
+                totalFiltered={totalFiltered}
+                datasetTotal={datasetTotal}
+                isPro={isPro}
+              />
+              <Card>
+                <CardContent className="p-4 sm:p-5 flex items-center gap-3 flex-wrap">
+                  <Button
+                    onClick={handleGeneratePDF}
+                    disabled={generating}
+                    className="bg-boopick-orange hover:bg-boopick-orange/90 text-white"
                   >
-                    생성된 리포트 보기 →
-                  </a>
-                )}
-              </div>
+                    {generating ? "PDF 생성 중…" : "📄 PDF 리포트 생성하기 →"}
+                  </Button>
+                  {pdfUrl && (
+                    <a
+                      href={pdfUrl}
+                      target="_blank"
+                      rel="noopener"
+                      className="text-sm text-boopick-orange font-semibold hover:underline"
+                    >
+                      PDF 다운로드 →
+                    </a>
+                  )}
+                  {reportId && (
+                    <a
+                      href={`/dashboard/reports/${reportId}`}
+                      className="text-sm text-slate-500 hover:underline"
+                    >
+                      리포트 상세
+                    </a>
+                  )}
+                </CardContent>
+              </Card>
             </>
           )}
         </div>

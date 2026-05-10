@@ -34,7 +34,7 @@ export function buildReportHtml(data: ReportData): string {
           <td>${l.보증금 ? formatKRW(l.보증금) : "—"}</td>
           <td>${l.월세 ? formatKRW(l.월세) : "—"}</td>
           <td>${l.추천업종 ?? "—"}</td>
-          <td><strong>${(l.score * 100).toFixed(0)}점</strong></td>
+          <td><strong>${l.score}점</strong></td>
         </tr>
       `
     )

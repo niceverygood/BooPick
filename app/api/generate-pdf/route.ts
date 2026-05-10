@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { parseQuery, EMPTY_PARSED, type ParsedQuery } from "@/lib/query-parser";
-import { rankListings, type ListingRow } from "@/lib/scoring";
+import { parseQuery } from "@/lib/query-parser";
+import {
+  EMPTY_PARSED,
+  type ParsedQuery,
+} from "@/lib/parsed-query-types";
+import {
+  buildSearchFilter,
+  postFilter,
+  rankListings,
+  type ListingRow,
+} from "@/lib/scoring";
 import { generateReportPDF } from "@/lib/pdf-generator";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 // POST /api/generate-pdf
-//   body: { dataset_id, parsed?, query?, industry? }
+//   body 1: { report_id }                     // 기존 리포트의 PDF 채우기 (권장)
+//   body 2: { dataset_id, query | parsed, industry?, query_raw? }  // 새 분석 + PDF
 //
-//   1. tier·월 사용량 체크 (basic 월 3건)
-//   2. parsed 우선 사용, 없으면 query를 server에서 파싱
-//   3. listings 조회 + 필터 + 랭킹
-//   4. PDF 생성 → Storage 업로드 (실패 시 inline 응답)
-//   5. reports row 저장 + 사용량 +1
+//   1. report_id 있으면 → reports row에서 query_parsed/selected_listings 로드 → PDF만 생성
+//   2. 없으면 새로 검색·랭킹 + reports insert + PDF 생성
+//   3. tier·월 사용량 체크 (basic 월 3건, report_id 케이스에는 추가 차감 안 함)
 export async function POST(req: NextRequest) {
   const supabase = createClient();
   const {
@@ -31,27 +39,129 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON 파싱 실패" }, { status: 400 });
   }
 
-  const datasetId =
-    typeof body.dataset_id === "string" ? body.dataset_id : null;
-  const industry =
-    typeof body.industry === "string" ? body.industry : null;
-  const queryRaw =
-    typeof body.query === "string" ? body.query.trim() : "";
-
-  if (!datasetId) {
-    return NextResponse.json({ error: "데이터셋 필요" }, { status: 400 });
-  }
-
   // tier 체크
   const { data: profile } = await supabase
     .from("profiles")
     .select("tier, reports_used_month")
     .eq("id", user.id)
     .maybeSingle();
-
   const tier = (profile?.tier as string) ?? "basic";
   const used = (profile?.reports_used_month as number) ?? 0;
 
+  // ───────── 분기 1: 기존 report_id PDF 채우기
+  const reportIdInput =
+    typeof body.report_id === "string" ? body.report_id : null;
+
+  if (reportIdInput) {
+    const { data: report } = await supabase
+      .from("reports")
+      .select(
+        "id, user_id, dataset_id, query_raw, query_parsed, industry, selected_listings, pdf_url"
+      )
+      .eq("id", reportIdInput)
+      .maybeSingle();
+
+    if (!report) {
+      return NextResponse.json({ error: "리포트가 없습니다" }, { status: 404 });
+    }
+    if ((report as { user_id: string }).user_id !== user.id) {
+      return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+    }
+
+    if ((report as { pdf_url: string | null }).pdf_url) {
+      return NextResponse.json({
+        ok: true,
+        report_id: report.id,
+        pdf_url: (report as { pdf_url: string }).pdf_url,
+        cached: true,
+      });
+    }
+
+    // basic 월 3건 한도 (PDF 채우기는 차감 — 한도 신뢰도)
+    if (tier === "basic" && used >= 3) {
+      return NextResponse.json(
+        {
+          error:
+            "베이직 플랜 월 3건 한도 초과. Pro로 업그레이드하면 무제한 사용 가능합니다.",
+        },
+        { status: 402 }
+      );
+    }
+
+    // 매물 다시 fetch (selected_listings 기준)
+    const ids = (report as { selected_listings: number[] | null })
+      .selected_listings;
+    if (!ids || ids.length === 0) {
+      return NextResponse.json(
+        { error: "선택된 매물이 없습니다" },
+        { status: 400 }
+      );
+    }
+    const { data: rows } = await supabase
+      .from("listings")
+      .select(
+        "id, article_no, dataset_id, 지역, 공급_m2, 전용_m2, 공급_평, 전용_평, 해당층, 전체층, 보증금, 월세, 관리비, 현재업종, 추천업종, 간략설명, 설명, 주소, 사용승인일, 중개사무소명"
+      )
+      .in("id", ids);
+
+    const parsed = mergeWithEmpty(
+      ((report as { query_parsed: Partial<ParsedQuery> | null })
+        .query_parsed ?? {}) as Partial<ParsedQuery>
+    );
+    const industry = (report as { industry: string | null }).industry;
+    const ranked = rankListings(
+      (rows ?? []) as unknown as ListingRow[],
+      parsed,
+      industry,
+      5
+    );
+
+    const pdfUrl = await renderAndUpload(
+      supabase,
+      user.id,
+      ranked,
+      parsed,
+      industry,
+      (report as { query_raw: string }).query_raw
+    );
+
+    if (pdfUrl) {
+      await supabase
+        .from("reports")
+        .update({ pdf_url: pdfUrl })
+        .eq("id", report.id);
+    }
+
+    if (tier === "basic") {
+      await supabase
+        .from("profiles")
+        .update({ reports_used_month: used + 1 })
+        .eq("id", user.id);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      report_id: report.id,
+      pdf_url: pdfUrl,
+      count: ranked.length,
+    });
+  }
+
+  // ───────── 분기 2: 처음부터 (legacy)
+  const datasetId =
+    typeof body.dataset_id === "string" ? body.dataset_id : null;
+  const industry =
+    typeof body.industry === "string" ? body.industry : null;
+  const queryRaw =
+    typeof body.query_raw === "string"
+      ? body.query_raw.trim()
+      : typeof body.query === "string"
+      ? (body.query as string).trim()
+      : "";
+
+  if (!datasetId) {
+    return NextResponse.json({ error: "데이터셋 필요" }, { status: 400 });
+  }
   if (tier === "basic" && used >= 3) {
     return NextResponse.json(
       {
@@ -62,110 +172,57 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // parsed / query 결정
   let parsed: ParsedQuery;
-  if (body.parsed && typeof body.parsed === "object") {
+  if (body.query && typeof body.query === "object") {
+    parsed = mergeWithEmpty(body.query as Partial<ParsedQuery>);
+  } else if (body.parsed && typeof body.parsed === "object") {
     parsed = mergeWithEmpty(body.parsed as Partial<ParsedQuery>);
   } else if (queryRaw.length > 0) {
     const r = await parseQuery(queryRaw);
     parsed = r.parsed;
   } else {
     return NextResponse.json(
-      { error: "조건(parsed) 또는 쿼리(query)가 필요합니다" },
+      { error: "조건(query: ParsedQuery)이 필요합니다" },
       { status: 400 }
     );
   }
 
-  // listings 조회
+  const f = buildSearchFilter(parsed);
   let q = supabase
     .from("listings")
     .select(
-      "id, 지역, 공급_m2, 전용_m2, 공급_평, 전용_평, 해당층, 전체층, 보증금, 월세, 관리비, 현재업종, 추천업종, 간략설명, 설명, 주소, 사용승인일"
+      "id, article_no, dataset_id, 지역, 공급_m2, 전용_m2, 공급_평, 전용_평, 해당층, 전체층, 보증금, 월세, 관리비, 현재업종, 추천업종, 간략설명, 설명, 주소, 사용승인일, 중개사무소명"
     )
     .eq("dataset_id", datasetId)
-    .limit(1000);
-
-  if (parsed.area_min_평 != null) q = q.gte("공급_평", parsed.area_min_평 * 0.85);
-  if (parsed.area_max_평 != null) q = q.lte("공급_평", parsed.area_max_평 * 1.15);
-  if (parsed.deposit_max_억 != null)
-    q = q.lte("보증금", parsed.deposit_max_억 * 100_000_000);
-  if (
-    parsed.rent_max_월세_만원 != null &&
-    parsed.rent_max_total_만원 == null
-  ) {
-    q = q.lte("월세", parsed.rent_max_월세_만원 * 10_000);
-  }
+    .limit(500);
+  if (f.area_min_m2 != null) q = q.gte("공급_m2", f.area_min_m2);
+  if (f.area_max_m2 != null) q = q.lte("공급_m2", f.area_max_m2);
+  if (f.deposit_max_krw != null) q = q.lte("보증금", f.deposit_max_krw);
+  if (f.rent_max_월세_krw != null) q = q.lte("월세", f.rent_max_월세_krw);
+  if (f.min_year != null) q = q.gte("사용승인일", `${f.min_year}-01-01`);
 
   const { data: rows } = await q;
-  let listings = (rows ?? []) as unknown as ListingRow[];
+  const candidates = postFilter(
+    (rows ?? []) as unknown as ListingRow[],
+    parsed
+  );
+  const ranked = rankListings(candidates, parsed, industry, 5);
 
-  if (parsed.regions.length > 0) {
-    listings = listings.filter((l) =>
-      l.지역 ? parsed.regions.some((r) => l.지역!.includes(r)) : false
-    );
-  }
-  if (parsed.exclude_regions.length > 0) {
-    listings = listings.filter((l) =>
-      l.지역 ? !parsed.exclude_regions.some((r) => l.지역!.includes(r)) : true
-    );
-  }
-  if (parsed.rent_max_total_만원 != null) {
-    const maxKrw = parsed.rent_max_total_만원 * 10_000;
-    listings = listings.filter((l) => {
-      const total = (l.월세 ?? 0) + (l.관리비 ?? 0);
-      return total === 0 || total <= maxKrw;
-    });
-  }
-  if (parsed.max_age_year != null || parsed.min_year != null) {
-    const now = new Date().getFullYear();
-    listings = listings.filter((l) => {
-      if (!l.사용승인일) return true;
-      const y = new Date(l.사용승인일).getFullYear();
-      if (parsed.max_age_year != null && now - y > parsed.max_age_year)
-        return false;
-      if (parsed.min_year != null && y < parsed.min_year) return false;
-      return true;
-    });
-  }
+  const pdfUrl = await renderAndUpload(
+    supabase,
+    user.id,
+    ranked,
+    parsed,
+    industry,
+    queryRaw
+  );
 
-  const ranked = rankListings(listings, parsed, industry, 30);
-
-  // PDF 생성
-  let pdfUrl: string | null = null;
-  try {
-    const pdfBuffer = await generateReportPDF({
-      title: `${industry ?? parsed.industry ?? "매물"} 분석 리포트`,
-      query: queryRaw || formatParsedAsQuery(parsed),
-      industry: industry ?? parsed.industry,
-      listings: ranked,
-      generatedAt: new Date(),
-    });
-
-    const path = `${user.id}/${Date.now()}.pdf`;
-    const { error: upErr } = await supabase.storage
-      .from("reports")
-      .upload(path, pdfBuffer, {
-        contentType: "application/pdf",
-        upsert: false,
-      });
-
-    if (!upErr) {
-      const { data } = supabase.storage.from("reports").getPublicUrl(path);
-      pdfUrl = data.publicUrl;
-    } else {
-      console.error("[pdf] storage upload error:", upErr.message);
-    }
-  } catch (e) {
-    console.error("[pdf] generation error:", e);
-  }
-
-  // reports insert
   const { data: report, error: rErr } = await supabase
     .from("reports")
     .insert({
       user_id: user.id,
       dataset_id: datasetId,
-      query_raw: queryRaw || formatParsedAsQuery(parsed),
+      query_raw: queryRaw || "",
       query_parsed: parsed,
       industry: industry ?? parsed.industry,
       selected_listings: ranked.map((r) => r.id),
@@ -192,8 +249,49 @@ export async function POST(req: NextRequest) {
     report_id: report.id,
     pdf_url: pdfUrl,
     count: ranked.length,
-    parsed,
   });
+}
+
+// ============================================================
+// Helpers
+
+type AnySupabase = ReturnType<typeof createClient>;
+
+async function renderAndUpload(
+  supabase: AnySupabase,
+  userId: string,
+  ranked: ReturnType<typeof rankListings>,
+  parsed: ParsedQuery,
+  industry: string | null,
+  queryRaw: string
+): Promise<string | null> {
+  try {
+    const buf = await generateReportPDF({
+      title: `${industry ?? parsed.industry ?? "매물"} 분석 리포트`,
+      query: queryRaw || "(자동 생성)",
+      industry: industry ?? parsed.industry,
+      listings: ranked,
+      generatedAt: new Date(),
+    });
+
+    const path = `${userId}/${Date.now()}.pdf`;
+    const { error: upErr } = await supabase.storage
+      .from("reports")
+      .upload(path, buf, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+
+    if (upErr) {
+      console.error("[pdf] storage upload error:", upErr.message);
+      return null;
+    }
+    const { data } = supabase.storage.from("reports").getPublicUrl(path);
+    return data.publicUrl;
+  } catch (e) {
+    console.error("[pdf] generation error:", e);
+    return null;
+  }
 }
 
 function mergeWithEmpty(p: Partial<ParsedQuery>): ParsedQuery {
@@ -202,35 +300,10 @@ function mergeWithEmpty(p: Partial<ParsedQuery>): ParsedQuery {
     ...p,
     regions: Array.isArray(p.regions) ? p.regions : [],
     exclude_regions: Array.isArray(p.exclude_regions) ? p.exclude_regions : [],
-    additional_notes: Array.isArray(p.additional_notes) ? p.additional_notes : [],
+    additional_notes: Array.isArray(p.additional_notes)
+      ? p.additional_notes
+      : [],
     area_연층_허용: p.area_연층_허용 === true,
     parking_required: p.parking_required === true,
   };
-}
-
-// query_raw가 비었을 때 fallback — parsed 조건을 한 줄로 합성
-function formatParsedAsQuery(p: ParsedQuery): string {
-  const parts: string[] = [];
-  if (p.industry) parts.push(p.industry);
-  if (p.regions.length) parts.push(p.regions.join(" "));
-  if (p.exclude_regions.length)
-    parts.push(`(${p.exclude_regions.map((r) => `${r}X`).join(" ")})`);
-  if (p.area_min_평 != null || p.area_max_평 != null) {
-    parts.push(
-      `${p.area_min_평 ?? ""}-${p.area_max_평 ?? ""}평${
-        p.area_연층_허용 ? " 연층OK" : ""
-      }`
-    );
-  }
-  if (p.rent_max_total_만원 != null)
-    parts.push(`월관 ${p.rent_max_total_만원}만`);
-  else if (p.rent_max_월세_만원 != null)
-    parts.push(`월세 ${p.rent_max_월세_만원}만`);
-  if (p.deposit_max_억 != null) parts.push(`보증금 ${p.deposit_max_억}억`);
-  if (p.employee_count != null) parts.push(`직원 ${p.employee_count}명`);
-  if (p.max_age_year != null) parts.push(`${p.max_age_year}년 이내`);
-  if (p.move_in_month) parts.push(`입주 ${p.move_in_month}`);
-  if (p.parking_required) parts.push("주차 필수");
-  if (p.additional_notes.length) parts.push(p.additional_notes.join(", "));
-  return parts.join(" / ");
 }
