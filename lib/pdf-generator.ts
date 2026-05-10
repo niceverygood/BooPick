@@ -42,12 +42,7 @@ const NAVER_BASE = "https://new.land.naver.com/?articleNo=";
 
 export async function generatePDF(input: PDFGenInput): Promise<Buffer> {
   const html = await buildHTML(input);
-
-  const puppeteer = await import("puppeteer");
-  const browser = await puppeteer.default.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();
@@ -61,6 +56,39 @@ export async function generatePDF(input: PDFGenInput): Promise<Buffer> {
   } finally {
     await browser.close();
   }
+}
+
+// 환경별 Chromium 런처:
+//   - Vercel/AWS Lambda: puppeteer-core + @sparticuz/chromium (50MB 제한 우회)
+//   - 로컬 macOS/Linux dev: puppeteer (자체 Chromium 다운로드)
+//
+// 판별: process.env.VERCEL || AWS_LAMBDA_FUNCTION_VERSION
+async function launchBrowser() {
+  const isServerless =
+    !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_VERSION;
+
+  if (isServerless) {
+    // Vercel function 사이즈 제한 (Hobby 50MB / Pro 250MB) 때문에
+    // puppeteer 자체 Chromium은 못 쓰고 @sparticuz/chromium 압축본 사용.
+    const chromium = (await import("@sparticuz/chromium")).default;
+    const puppeteerCore = await import("puppeteer-core");
+    return puppeteerCore.default.launch({
+      args: [
+        ...chromium.args,
+        "--font-render-hinting=none",
+      ],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+  }
+
+  // 로컬 dev — 자체 Chromium 사용
+  const puppeteer = await import("puppeteer");
+  return puppeteer.default.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
 }
 
 // 호환 — Phase 3까지 사용된 시그니처
