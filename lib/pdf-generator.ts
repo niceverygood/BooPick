@@ -17,25 +17,10 @@ import { join } from "path";
 import QRCode from "qrcode";
 import type { ScoredListing } from "./scoring";
 import type { ParsedQuery } from "./parsed-query-types";
-import {
-  loadIndustryContext,
-  buildIndustryContextSectionHTML,
-  escapeHtml,
-} from "./industries/marriage-context";
+import { getIndustryConfig, type IndustryAnalysisResult } from "./industries";
+import { escapeHtml } from "./industries/marriage";
 
 export type Tier = "basic" | "pro";
-
-export interface AnalysisPoint {
-  icon: string;
-  title: string;
-  description: string;
-}
-
-export interface ListingAnalysis {
-  listing_id: number;
-  headline: string;
-  points: AnalysisPoint[];
-}
 
 export interface PDFGenInput {
   title: string;                  // "사무실 임대 매물 제안서" 등
@@ -47,7 +32,7 @@ export interface PDFGenInput {
   query_raw?: string;
   listings: ScoredListing[];
   agent_name?: string;            // 서명용 공인중개사 이름
-  industry_analysis?: ListingAnalysis[]; // Pro: 매물별 산업 분석 (Phase 5에서 생성)
+  industry_analysis?: IndustryAnalysisResult; // Pro: { context_page, per_listing[5] }
 }
 
 const NAVER_BASE = "https://new.land.naver.com/?articleNo=";
@@ -132,17 +117,27 @@ async function buildHTML(input: PDFGenInput): Promise<string> {
   const summaryPageNum = isPro ? "02" : "01";
 
   // Pro 산업 컨텍스트 페이지
+  // 우선순위: input.industry_analysis.context_page (Claude 생성) > 정적 config.context_page_html
   let industryContextSection = "";
   let industryCtxBuilt = false;
   if (isPro && input.industry) {
-    const ctx = await loadIndustryContext(input.industry);
-    if (ctx) {
-      industryContextSection = buildIndustryContextSectionHTML(
-        ctx,
-        "01",
-        totalPages
-      );
+    const fromAnalysis = input.industry_analysis?.context_page ?? "";
+    if (fromAnalysis.length > 0) {
+      industryContextSection = fromAnalysis;
       industryCtxBuilt = true;
+    } else {
+      // 정적 fallback (Claude 분석 미생성 시)
+      const cfg = getIndustryConfig(input.industry);
+      if (cfg && cfg.context_page_html) {
+        industryContextSection = cfg.context_page_html;
+        industryCtxBuilt = true;
+      }
+    }
+    // INDUSTRY_PAGE_NUM placeholder 치환 (industry config의 페이지 번호 = 01)
+    if (industryCtxBuilt) {
+      industryContextSection = industryContextSection
+        .split("{{INDUSTRY_PAGE_NUM}}").join("01")
+        .split("{{TOTAL_PAGES}}").join(totalPages);
     }
   }
 
@@ -191,7 +186,8 @@ async function buildHTML(input: PDFGenInput): Promise<string> {
     ? buildReviewOpinionHTML(listings, input.industry, input.query)
     : buildBasicReviewHTML(listings);
 
-  // 매물 페이지 5개
+  // 매물 페이지 5개 — 각 매물의 biz-analysis는 industry_analysis.per_listing[i] HTML 직접 주입
+  const perListing = input.industry_analysis?.per_listing ?? [];
   const listingPagesHTML = listings
     .map((l, i) =>
       buildListingPage({
@@ -201,7 +197,7 @@ async function buildHTML(input: PDFGenInput): Promise<string> {
         totalPages,
         bodyPageNum: pad2((isPro ? 3 : 2) + i), // Pro: 03~07, Basic: 02~06
         qrDataUrl: qrMap.get(l.id) ?? null,
-        analysis: input.industry_analysis?.find((a) => a.listing_id === l.id),
+        bizAnalysisHTML: perListing[i] ?? "",
         industry: input.industry,
         agentName: input.agent_name,
       })
@@ -482,13 +478,13 @@ interface ListingPageOpts {
   totalPages: string;
   bodyPageNum: string;
   qrDataUrl: string | null;
-  analysis: ListingAnalysis | undefined;
+  bizAnalysisHTML: string;   // industries 모듈이 사전 렌더한 박스 HTML (Pro + analysis 시)
   industry: string | null;
   agentName?: string;
 }
 
 function buildListingPage(opts: ListingPageOpts): string {
-  const { listing: l, rank, tier, totalPages, bodyPageNum, qrDataUrl, analysis, industry, agentName } = opts;
+  const { listing: l, rank, tier, totalPages, bodyPageNum, qrDataUrl, bizAnalysisHTML, industry, agentName } = opts;
   const isPro = tier === "pro";
 
   // 헤더 제목 — 지역 / 층 / 면적
@@ -503,9 +499,13 @@ function buildListingPage(opts: ListingPageOpts): string {
   // 정보 그리드 (3x2)
   const infoGrid = buildInfoGridHTML(l);
 
-  // 산업 분석 박스 (Pro + analysis)
+  // 산업 분석 박스 (Pro + industry):
+  //   - bizAnalysisHTML가 있으면(Claude 생성) 그대로 사용
+  //   - 없으면 placeholder 박스 (Phase 5 호출 X 이거나 분석 실패 시)
   const bizBox = isPro && industry
-    ? buildBizAnalysisHTML(analysis, industry)
+    ? bizAnalysisHTML.length > 0
+      ? bizAnalysisHTML
+      : buildBizAnalysisPlaceholder(industry)
     : "";
 
   // 체크리스트
@@ -514,19 +514,16 @@ function buildListingPage(opts: ListingPageOpts): string {
   // agency
   const agency = `<div class="agency-info">등록 부동산 · <strong>${escapeHtml(agentName ?? "공인중개사")}</strong></div>`;
 
+  // 빈 .page-header 제거 — page-num을 listing-page-header 내부 우측 상단에 배치해 수직 공간 절약
   return `
-  <section class="page">
-    <header class="page-header">
-      <span></span>
-      <span class="page-num">${bodyPageNum} / ${totalPages}</span>
-    </header>
-
+  <section class="page listing-page">
     <div class="listing-page-header">
       <div class="listing-num-big">${pad2(rank)}</div>
       <div class="listing-head-text">
         <div class="listing-title">${escapeHtml(title)}</div>
         <div class="listing-badges">${badges}</div>
       </div>
+      <div class="listing-page-num">${bodyPageNum} / ${totalPages}</div>
     </div>
 
     ${naverBox}
@@ -639,37 +636,13 @@ function buildInfoGridHTML(l: ScoredListing): string {
   </table>`;
 }
 
-function buildBizAnalysisHTML(
-  analysis: ListingAnalysis | undefined,
-  industry: string
-): string {
-  // analysis 미제공 → 박스 skeleton만 (Phase 5에서 채워질 자리)
-  if (!analysis) {
-    return `
-    <div class="biz-analysis">
-      <div class="biz-analysis-header">○ ${escapeHtml(industry)} 운영 관점 분석</div>
-      <div class="biz-analysis-headline" style="color:#94A3B8;font-style:italic;">산업 분석은 다음 검색 시 자동 생성됩니다 (Phase 5)</div>
-    </div>`;
-  }
-
-  const points = analysis.points
-    .map(
-      (p) => `
-      <div class="biz-point">
-        <div class="biz-icon">${escapeHtml(p.icon)}</div>
-        <div class="biz-content">
-          <div class="biz-title">${escapeHtml(p.title)}</div>
-          <div class="biz-desc">${escapeHtml(p.description)}</div>
-        </div>
-      </div>`
-    )
-    .join("");
-
+// industry_analysis가 비었거나 매물별 분석이 실패한 슬롯의 fallback.
+// 박스 자리만 잡고 안내 문구 표시 — Phase 5 호출되면 빈 슬롯 사라짐.
+function buildBizAnalysisPlaceholder(industry: string): string {
   return `
   <div class="biz-analysis">
     <div class="biz-analysis-header">○ ${escapeHtml(industry)} 운영 관점 분석</div>
-    <div class="biz-analysis-headline">${escapeHtml(analysis.headline)}</div>
-    ${points}
+    <div class="biz-analysis-headline" style="color:#94A3B8;font-style:italic;">분석 생성 중 — 다음 검색 시 자동 채워집니다</div>
   </div>`;
 }
 

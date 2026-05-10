@@ -326,6 +326,26 @@ interface RenderResult {
 
 async function renderUploadAndSign(a: RenderArgs): Promise<RenderResult> {
   try {
+    // Pro + 지원 산업이면 Claude로 산업 분석 생성 (5건 병렬, 30초 타깃)
+    let industryAnalysis: import("@/lib/industries").IndustryAnalysisResult | undefined;
+    if (a.tier === "pro" && a.industry) {
+      const { generateIndustryAnalysis, getIndustryConfig } = await import(
+        "@/lib/industries"
+      );
+      if (getIndustryConfig(a.industry)) {
+        try {
+          industryAnalysis = await generateIndustryAnalysis(
+            a.industry,
+            a.listings,
+            a.query
+          );
+        } catch (e) {
+          console.error("[pdf] industry analysis fail:", e);
+          // 분석 실패해도 PDF는 생성 (placeholder 박스로)
+        }
+      }
+    }
+
     const buf = await generatePDF({
       title: buildPDFTitle(a.industry),
       date: new Date(),
@@ -335,6 +355,7 @@ async function renderUploadAndSign(a: RenderArgs): Promise<RenderResult> {
       query_raw: a.queryRaw,
       listings: a.listings,
       agent_name: a.agentName,
+      industry_analysis: industryAnalysis,
     });
 
     const path = `${a.userId}/${a.reportId}.pdf`;

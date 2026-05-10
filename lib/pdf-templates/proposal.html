@@ -291,13 +291,23 @@
     .listing-page-header {
       display: flex;
       align-items: flex-start;
-      gap: 14pt;
+      gap: 12pt;
       border-bottom: 2pt solid var(--color-primary);
-      padding-bottom: 10pt;
-      margin-bottom: 14pt;
+      padding-bottom: 8pt;
+      margin-bottom: 10pt;
+      position: relative;
+    }
+    .listing-page-num {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 9pt;
+      color: var(--color-text-muted);
+      letter-spacing: 1pt;
+      font-variant-numeric: tabular-nums;
     }
     .listing-num-big {
-      font-size: 28pt;
+      font-size: 24pt;
       font-weight: 800;
       color: var(--color-primary);
       line-height: 1;
@@ -305,13 +315,13 @@
     }
     .listing-head-text {
       flex: 1;
-      padding-top: 2pt;
+      padding-top: 1pt;
     }
     .listing-title {
-      font-size: 13pt;
+      font-size: 12.5pt;
       font-weight: 700;
       color: var(--color-primary);
-      margin-bottom: 5pt;
+      margin-bottom: 4pt;
       letter-spacing: -0.2pt;
     }
     .listing-badges {
@@ -338,12 +348,12 @@
     .naver-id-box {
       display: flex;
       align-items: center;
-      gap: 12pt;
+      gap: 10pt;
       background: var(--color-accent-light);
       border: 1pt solid var(--color-accent-border);
       border-radius: 4pt;
-      padding: 12pt 14pt;
-      margin-bottom: 14pt;
+      padding: 9pt 12pt;
+      margin-bottom: 10pt;
     }
     .naver-id-text { flex: 1; }
     .naver-id-label {
@@ -387,12 +397,12 @@
     .info-grid {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 14pt;
+      margin-bottom: 10pt;
       table-layout: fixed;
     }
     .info-grid td {
       border: 0.5pt solid var(--color-border);
-      padding: 9pt 11pt;
+      padding: 7pt 10pt;
       vertical-align: top;
       width: 33.333%;
     }
@@ -400,17 +410,17 @@
       font-size: 7.5pt;
       color: var(--color-text-faint);
       letter-spacing: 0.3pt;
-      margin-bottom: 4pt;
+      margin-bottom: 3pt;
       font-weight: 600;
     }
     .info-value {
-      font-size: 11pt;
+      font-size: 10.5pt;
       font-weight: 700;
       color: var(--color-primary);
-      margin-bottom: 2pt;
+      margin-bottom: 1pt;
     }
     .info-sub {
-      font-size: 8pt;
+      font-size: 7.5pt;
       color: var(--color-text-muted);
     }
 
@@ -421,34 +431,34 @@
       background: linear-gradient(to right, #FFFBEB 0%, #FEF9F0 100%);
       border: 1.5pt solid var(--color-accent-border);
       border-radius: 6pt;
-      padding: 13pt 16pt;
-      margin-bottom: 14pt;
+      padding: 10pt 14pt;
+      margin-bottom: 10pt;
     }
     .biz-analysis-header {
-      font-size: 10.5pt;
+      font-size: 10pt;
       font-weight: 700;
       color: var(--color-accent);
-      margin-bottom: 4pt;
+      margin-bottom: 3pt;
     }
     .biz-analysis-headline {
-      font-size: 11pt;
+      font-size: 10.5pt;
       font-weight: 700;
       color: var(--color-primary);
       border-bottom: 1pt dashed var(--color-accent-border);
-      padding-bottom: 8pt;
-      margin-bottom: 10pt;
+      padding-bottom: 6pt;
+      margin-bottom: 7pt;
     }
     .biz-point {
       display: table;
       width: 100%;
-      margin-bottom: 8pt;
+      margin-bottom: 5pt;
     }
     .biz-point:last-child { margin-bottom: 0; }
     .biz-icon {
       display: table-cell;
-      width: 26pt;
+      width: 22pt;
       vertical-align: top;
-      font-size: 14pt;
+      font-size: 12pt;
       line-height: 1.2;
     }
     .biz-content {
@@ -457,15 +467,15 @@
       padding-left: 4pt;
     }
     .biz-title {
-      font-size: 9.5pt;
+      font-size: 9pt;
       color: var(--color-primary);
       font-weight: 700;
-      margin-bottom: 2pt;
+      margin-bottom: 1pt;
     }
     .biz-desc {
-      font-size: 9pt;
+      font-size: 8.5pt;
       color: var(--color-text);
-      line-height: 1.65;
+      line-height: 1.5;
     }
 
     /* ─────────────────────────────────────────────────────────
@@ -474,24 +484,24 @@
     .checklist {
       background: var(--color-bg-soft);
       border-radius: 4pt;
-      padding: 9pt 14pt;
-      margin-bottom: 14pt;
+      padding: 7pt 14pt;
+      margin-bottom: 10pt;
     }
     .checklist-title {
-      font-size: 10pt;
+      font-size: 9.5pt;
       font-weight: 700;
       color: var(--color-primary);
-      padding-bottom: 7pt;
+      padding-bottom: 5pt;
       border-bottom: 0.5pt solid var(--color-border);
-      margin-bottom: 6pt;
+      margin-bottom: 4pt;
     }
     .checklist-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 9pt;
+      font-size: 8.5pt;
     }
     .checklist-table td {
-      padding: 4pt 0;
+      padding: 3pt 0;
       border-bottom: 0.5pt dashed var(--color-border);
     }
     .checklist-table tr:last-child td { border-bottom: none; }
