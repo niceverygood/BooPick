@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
+import { KakaoLoginButton } from "@/components/kakao-login-button";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -78,6 +79,16 @@ export default function SignupPage() {
         <p className="text-sm text-slate-500 mb-6">
           베이직 플랜 무료. 카드 등록 불필요.
         </p>
+
+        <div className="mb-5">
+          <KakaoLoginButton intent="signup" />
+        </div>
+
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 h-px bg-slate-200" />
+          <span className="text-xs text-slate-400">또는 이메일로</span>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>

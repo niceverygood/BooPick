@@ -1,20 +1,37 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, Suspense, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
+import { KakaoLoginButton } from "@/components/kakao-login-button";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
+function LoginInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // OAuth 콜백에서 에러로 돌아온 경우 메시지 표시
+  useEffect(() => {
+    const errParam = searchParams.get("error");
+    if (errParam) setError(decodeURIComponent(errParam));
+  }, [searchParams]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -27,7 +44,7 @@ export default function LoginPage() {
         password,
       });
       if (err) throw err;
-      router.push("/dashboard");
+      router.push(next);
       router.refresh();
     } catch (err) {
       setError(
@@ -47,6 +64,16 @@ export default function LoginPage() {
         <p className="text-sm text-slate-500 mb-6">
           부픽 분석 SaaS에 오신 것을 환영합니다.
         </p>
+
+        <div className="mb-5">
+          <KakaoLoginButton next={next} intent="login" />
+        </div>
+
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 h-px bg-slate-200" />
+          <span className="text-xs text-slate-400">또는 이메일로</span>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
