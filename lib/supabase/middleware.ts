@@ -32,12 +32,18 @@ export async function updateSession(request: NextRequest) {
     console.error("[middleware] session refresh fail:", e);
   }
 
-  // /dashboard/* 보호
   const path = request.nextUrl.pathname;
-  if (path.startsWith("/dashboard") && !user) {
+
+  // /dashboard/* + /admin/* 보호
+  if ((path.startsWith("/dashboard") || path.startsWith("/admin")) && !user) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", path);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // 로그인 사용자가 /login, /signup 접근 시 /dashboard로 리다이렉트
+  if (user && (path === "/login" || path === "/signup")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return response;

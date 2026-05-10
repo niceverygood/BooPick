@@ -13,6 +13,11 @@ import {
 } from "@/lib/scoring";
 import { generatePDF, type Tier } from "@/lib/pdf-generator";
 import { parseQuery } from "@/lib/query-parser";
+import {
+  getCurrentProfile,
+  checkReportLimit,
+  incrementReportCount,
+} from "@/lib/tier-check";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -43,18 +48,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON 파싱 실패" }, { status: 400 });
   }
 
-  // tier
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("tier, reports_used_month, name")
-    .eq("id", user.id)
-    .maybeSingle();
-  const tier: Tier =
-    ((profile as { tier?: string } | null)?.tier as Tier) ?? "basic";
-  const used = (profile as { reports_used_month?: number } | null)
-    ?.reports_used_month ?? 0;
+  // tier + 월 사용량 (자동 리셋 포함)
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return NextResponse.json(
+      { error: "프로필을 찾을 수 없습니다" },
+      { status: 401 }
+    );
+  }
+  const tier: Tier = profile.tier;
   const agentName =
-    (profile as { name?: string } | null)?.name ?? user.email?.split("@")[0] ?? "공인중개사";
+    profile.name ?? user.email?.split("@")[0] ?? "공인중개사";
 
   // ───────── 분기 1: report_id 채우기
   const reportIdInput =
@@ -102,14 +106,24 @@ export async function POST(req: NextRequest) {
     }
 
     // 한도 체크 (basic만)
-    if (tier === "basic" && used >= 3) {
-      return NextResponse.json(
-        {
-          error:
-            "베이직 플랜 월 3건 한도 초과. Pro로 업그레이드하면 무제한 사용 가능합니다.",
-        },
-        { status: 402 }
-      );
+    {
+      const limit = checkReportLimit(profile);
+      if (!limit.allowed) {
+        return NextResponse.json(
+          {
+            error: "Monthly limit reached",
+            message: `이번 달 ${limit.limit}건 한도에 도달했습니다. ${
+              tier === "basic"
+                ? "Pro로 업그레이드하면 월 50건까지 가능합니다."
+                : "다음 달 1일에 자동 리셋됩니다."
+            }`,
+            used: limit.used,
+            limit: limit.limit,
+            tier,
+          },
+          { status: 429 }
+        );
+      }
     }
 
     if (!r.selected_listings || r.selected_listings.length === 0) {
@@ -159,12 +173,7 @@ export async function POST(req: NextRequest) {
       .update({ pdf_url: result.publicPath, tier_used: tier })
       .eq("id", r.id);
 
-    if (tier === "basic") {
-      await supabase
-        .from("profiles")
-        .update({ reports_used_month: used + 1 })
-        .eq("id", user.id);
-    }
+    await incrementReportCount(user.id);
 
     return NextResponse.json({
       ok: true,
@@ -189,14 +198,20 @@ export async function POST(req: NextRequest) {
   if (!datasetId)
     return NextResponse.json({ error: "데이터셋 필요" }, { status: 400 });
 
-  if (tier === "basic" && used >= 3) {
-    return NextResponse.json(
-      {
-        error:
-          "베이직 플랜 월 3건 한도 초과. Pro로 업그레이드하면 무제한 사용 가능합니다.",
-      },
-      { status: 402 }
-    );
+  {
+    const limit = checkReportLimit(profile);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error: "Monthly limit reached",
+          message: `이번 달 ${limit.limit}건 한도에 도달했습니다.`,
+          used: limit.used,
+          limit: limit.limit,
+          tier,
+        },
+        { status: 429 }
+      );
+    }
   }
 
   let parsed: ParsedQuery;
@@ -282,12 +297,7 @@ export async function POST(req: NextRequest) {
     .update({ pdf_url: result.publicPath })
     .eq("id", report.id);
 
-  if (tier === "basic") {
-    await supabase
-      .from("profiles")
-      .update({ reports_used_month: used + 1 })
-      .eq("id", user.id);
-  }
+  await incrementReportCount(user.id);
 
   return NextResponse.json({
     ok: true,

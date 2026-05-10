@@ -11,6 +11,11 @@ import {
   rankListings,
   type ListingRow,
 } from "@/lib/scoring";
+import {
+  getCurrentProfile,
+  checkReportLimit,
+  canUseIndustryAnalysis,
+} from "@/lib/tier-check";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -43,11 +48,52 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
   }
 
+  // ───── Phase 6: 티어 + 월 사용량 체크 ─────
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return NextResponse.json(
+      { error: "프로필을 찾을 수 없습니다" },
+      { status: 401 }
+    );
+  }
+
+  const limit = checkReportLimit(profile);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      {
+        error: "Monthly limit reached",
+        message: `이번 달 ${limit.limit}건 한도에 도달했습니다. ${
+          profile.tier === "basic"
+            ? "Pro로 업그레이드하면 월 50건까지 가능합니다."
+            : "다음 달 1일에 자동 리셋됩니다."
+        }`,
+        used: limit.used,
+        limit: limit.limit,
+        tier: profile.tier,
+      },
+      { status: 429 }
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "JSON 파싱 실패" }, { status: 400 });
+  }
+
+  // 산업 분석 가능 여부 (basic + industry='결혼정보회사' → 403)
+  const reqIndustry =
+    typeof body.industry === "string" ? body.industry : null;
+  if (reqIndustry && !canUseIndustryAnalysis(profile, reqIndustry)) {
+    return NextResponse.json(
+      {
+        error: "Pro tier required",
+        message: `${reqIndustry} 산업 관점 분석은 Pro 티어부터 이용 가능합니다. 일반 사무실로 분석하시거나 Pro 베타 신청해주세요.`,
+        tier: profile.tier,
+      },
+      { status: 403 }
+    );
   }
 
   const datasetId =
@@ -130,13 +176,8 @@ export async function POST(req: NextRequest) {
 
   const ranked = rankListings(candidates, parsed, industry, 5);
 
-  // tier (reports에 저장용)
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("tier")
-    .eq("id", user.id)
-    .maybeSingle();
-  const tier = (profile as { tier?: string } | null)?.tier ?? "basic";
+  // tier (reports에 저장용) — 위 `profile` 재사용
+  const tier = profile.tier;
 
   // reports row 생성 — pdf_url은 Phase 4에서 채움
   const { data: report, error: rErr } = await supabase

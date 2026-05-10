@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import { DatasetRow } from "@/components/dataset-row";
+import { ProUpgradeButton } from "@/components/pro-upgrade-button";
+import { getCurrentProfile, TIER_LIMITS, type Profile } from "@/lib/tier-check";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +25,6 @@ interface Report {
   pdf_url: string | null;
 }
 
-interface Profile {
-  tier: string;
-  reports_used_month: number;
-}
-
 async function fetchData(): Promise<{
   profile: Profile | null;
   datasets: Dataset[];
@@ -35,9 +32,9 @@ async function fetchData(): Promise<{
 }> {
   try {
     const supabase = createClient();
-    const [{ data: profile }, { data: datasets }, { data: reports }] =
+    const [profile, { data: datasets }, { data: reports }] =
       await Promise.all([
-        supabase.from("profiles").select("tier, reports_used_month").maybeSingle(),
+        getCurrentProfile(), // 월 자동 리셋 포함
         supabase
           .from("datasets")
           .select("id, name, row_count, uploaded_at, original_filename")
@@ -50,7 +47,7 @@ async function fetchData(): Promise<{
           .limit(10),
       ]);
     return {
-      profile: (profile as Profile | null) ?? null,
+      profile,
       datasets: (datasets as Dataset[] | null) ?? [],
       reports: (reports as Report[] | null) ?? [],
     };
@@ -63,8 +60,11 @@ export default async function DashboardHome() {
   const { profile, datasets, reports } = await fetchData();
 
   const isPro = profile?.tier === "pro";
-  const monthlyLimit = isPro ? "무제한" : "월 3건";
+  const limit = profile ? TIER_LIMITS[profile.tier].monthly_reports : 5;
   const used = profile?.reports_used_month ?? 0;
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+  const remaining = Math.max(0, limit - used);
+  const reachedLimit = used >= limit;
 
   return (
     <div className="space-y-6">
@@ -84,9 +84,46 @@ export default async function DashboardHome() {
               : "bg-slate-200 text-slate-700 border-none hover:bg-slate-200"
           }
         >
-          {isPro ? "PRO" : "BASIC"} · 이번 달 {used}건 / {monthlyLimit}
+          {isPro ? "PRO" : "BASIC"} · 이번 달 {used}건 / {limit}건
         </Badge>
       </div>
+
+      {/* 사용량 카드 */}
+      <Card>
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                이번 달 리포트
+              </p>
+              <p className="mt-1.5 text-2xl sm:text-3xl font-bold text-boopick-navy">
+                {used} <span className="text-base text-slate-400">/ {limit}건</span>
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {isPro ? "Pro 티어" : "베이직 티어"} ·{" "}
+                {reachedLimit
+                  ? "한도 도달 (다음 달 1일 자동 리셋)"
+                  : `${remaining}건 남음`}
+              </p>
+              {/* 사용량 progress bar */}
+              <div className="mt-3 h-2 bg-slate-100 rounded-full overflow-hidden max-w-md">
+                <div
+                  className={
+                    "h-full transition-all " +
+                    (pct >= 100
+                      ? "bg-red-500"
+                      : pct >= 80
+                      ? "bg-amber-500"
+                      : "bg-boopick-orange")
+                  }
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+            {!isPro && <ProUpgradeButton />}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 빠른 액션 */}
       <Card className="bg-gradient-to-br from-boopick-navy to-slate-700 text-white border-none shadow-lg">
