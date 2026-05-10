@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile, isAdmin } from "@/lib/tier-check";
 
 const NAV = [
   { href: "/dashboard", label: "홈" },
@@ -28,6 +29,10 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  // 어드민이면 [Admin] 링크 노출
+  const profile = await getCurrentProfile();
+  const showAdmin = isAdmin(profile);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white sticky top-0 z-20">
@@ -52,6 +57,15 @@ export default async function DashboardLayout({
                 {n.label}
               </Link>
             ))}
+            {showAdmin && (
+              <Link
+                href="/admin/users"
+                className="text-sm px-3 py-1.5 rounded-md text-boopick-orange hover:bg-orange-50 whitespace-nowrap font-semibold border border-boopick-orange/30 ml-1"
+                title="어드민 — 한대표 전용"
+              >
+                ⚙ Admin
+              </Link>
+            )}
           </nav>
           <span className="text-xs text-slate-400 hidden sm:inline">
             {userEmail}

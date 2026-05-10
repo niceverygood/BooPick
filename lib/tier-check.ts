@@ -53,7 +53,8 @@ export interface ReportLimit {
 
 const ADMIN_EMAILS = new Set([
   "seungsoo@bottle.kr",
-  "niceverygood1@gmail.com", // 한승수 대표 (현재 dev 환경)
+  "niceverygood1@gmail.com",  // 한승수 대표 (개인 dev)
+  "dev@bottlecorp.kr",        // Bottle Corp dev 계정 (Kakao 로그인)
 ]);
 
 export function isAdmin(profile: Profile | null): boolean {
