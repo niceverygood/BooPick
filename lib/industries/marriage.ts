@@ -9,12 +9,14 @@
 import type { IndustryWeights } from "../scoring";
 
 export const MARRIAGE_WEIGHTS: IndustryWeights = {
-  area: 0.35,           // 가장 중요
-  floor: 0.15,
+  area: 0.3,            // 가장 중요
+  floor: 0.1,
   rent: 0.1,
   deposit: 0.1,
   age: 0.15,            // 건물 신축성
-  industry_match: 0.15,
+  industry_match: 0.1,
+  region: 0.15,
+  parking: 0.1,
 };
 
 // 결혼식장 적정 면적 (m²)

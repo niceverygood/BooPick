@@ -24,6 +24,7 @@ export interface ClaudeCallOptions {
   userMessage: string;
   maxTokens?: number;
   useHaiku?: boolean;
+  modelOverride?: string;
   jsonMode?: boolean;
 }
 
@@ -37,7 +38,8 @@ export interface ClaudeCallResult {
 export async function callClaude(
   opts: ClaudeCallOptions
 ): Promise<ClaudeCallResult> {
-  const model = opts.useHaiku ? HAIKU : MODEL;
+  const model =
+    opts.modelOverride ?? (opts.useHaiku ? HAIKU : MODEL);
 
   const response = await getAnthropic().messages.create({
     model,
