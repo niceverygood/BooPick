@@ -170,7 +170,11 @@ export function UploadDropzone() {
       });
       const createData = await createRes.json();
       if (!createRes.ok || !createData.dataset_id) {
-        throw new Error(createData.error ?? "데이터셋 생성 실패");
+        const baseMsg = createData.error ?? "데이터셋 생성 실패";
+        const detail = createData.detail
+          ? ` — ${createData.detail}`
+          : "";
+        throw new Error(baseMsg + detail);
       }
       const datasetId: string = createData.dataset_id;
 
