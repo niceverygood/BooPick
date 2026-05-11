@@ -66,6 +66,21 @@ export function UploadDropzone() {
       setError("xlsx, xls 또는 csv 파일만 업로드 가능합니다");
       return;
     }
+    // macOS AppleDouble 메타데이터 파일 차단 (._foo.xlsx / _$foo.xlsx)
+    if (/^[._$]|^_\$/.test(f.name)) {
+      setError(
+        "이 파일은 macOS 시스템 메타데이터입니다 (실제 파일 아님). " +
+          "Finder에서 Cmd+Shift+. 로 숨김 파일을 끄고 원본을 다시 선택해주세요."
+      );
+      return;
+    }
+    // 0바이트 또는 매우 작은 파일도 의심
+    if (f.size < 1024) {
+      setError(
+        `파일 크기가 ${f.size}B로 너무 작습니다. 손상된 파일이거나 메타데이터일 수 있어요.`
+      );
+      return;
+    }
     setFile(f);
     setDatasetName(f.name.replace(/\.(xlsx|xls|csv)$/i, ""));
     setError(null);
