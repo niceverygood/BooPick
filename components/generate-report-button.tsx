@@ -52,11 +52,18 @@ export function GenerateReportButton({
         body: JSON.stringify({ report_id: reportId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "PDF 생성 실패");
+      if (!res.ok) {
+        const baseMsg = data.error ?? "PDF 생성 실패";
+        const detail = data.detail ? ` — ${data.detail}` : "";
+        throw new Error(baseMsg + detail);
+      }
 
       const url: string | null = data.pdf_url ?? null;
       const name: string | null = data.file_name ?? null;
-      if (!url) throw new Error("PDF URL을 받지 못했습니다");
+      if (!url) {
+        const detail = data.detail ? ` (${data.detail})` : "";
+        throw new Error("PDF URL을 받지 못했습니다" + detail);
+      }
 
       setPdfUrl(url);
       setFileName(name);
