@@ -5,7 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import { DatasetRow } from "@/components/dataset-row";
 import { ProUpgradeButton } from "@/components/pro-upgrade-button";
-import { getCurrentProfile, TIER_LIMITS, type Profile } from "@/lib/tier-check";
+import {
+  getCurrentProfile,
+  TIER_LIMITS,
+  daysUntilExpiry,
+  type Profile,
+} from "@/lib/tier-check";
 
 export const dynamic = "force-dynamic";
 
@@ -164,17 +169,46 @@ export default async function DashboardHome() {
                 업로드된 데이터셋이 없습니다.
               </p>
             ) : (
-              <ul className="space-y-1">
-                {datasets.map((d) => (
-                  <DatasetRow
-                    key={d.id}
-                    id={d.id}
-                    name={d.name}
-                    rowCount={d.row_count}
-                    uploadedAt={d.uploaded_at}
-                  />
-                ))}
-              </ul>
+              <>
+                <ul className="space-y-1">
+                  {datasets.map((d) => (
+                    <DatasetRow
+                      key={d.id}
+                      id={d.id}
+                      name={d.name}
+                      rowCount={d.row_count}
+                      uploadedAt={d.uploaded_at}
+                      daysUntilExpiry={
+                        profile
+                          ? daysUntilExpiry(profile, d.uploaded_at)
+                          : null
+                      }
+                    />
+                  ))}
+                </ul>
+                {/* Basic 한도 도달 안내 (데이터셋 1개) */}
+                {!isPro &&
+                  datasets.length >= TIER_LIMITS.basic.monthly_datasets && (
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                      <p className="text-xs font-semibold text-amber-800">
+                        ⓵ 베이직 데이터셋 한도 ({TIER_LIMITS.basic.monthly_datasets}개) 도달
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1">
+                        새 데이터셋 업로드하려면 기존 삭제하시거나, Pro로
+                        업그레이드하면 무제한 + 영구 보관됩니다.
+                      </p>
+                    </div>
+                  )}
+                {/* Basic 데이터셋 30일 안내 (첫 데이터셋 후) */}
+                {!isPro && datasets.length > 0 && (
+                  <p className="text-[10px] text-slate-400 mt-3 text-center">
+                    💡 베이직 데이터셋은 30일 후 자동 삭제됩니다 ·{" "}
+                    <span className="text-boopick-orange font-semibold">
+                      Pro로 영구 보관
+                    </span>
+                  </p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

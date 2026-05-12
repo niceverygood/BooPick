@@ -21,6 +21,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { rowToListing } from "@/lib/excel-parser";
 import { autoMapHeaders, type StandardColumn } from "@/lib/column-mappings";
+import {
+  getCurrentProfile,
+  checkDatasetLimit,
+  TIER_LIMITS,
+} from "@/lib/tier-check";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -121,6 +126,35 @@ async function handleCreate(
     return NextResponse.json({ error: "데이터셋 이름 필요" }, { status: 400 });
   }
   const total = typeof p.total_rows === "number" ? p.total_rows : 0;
+
+  // ───── 티어 한도 체크 (Basic: 1개) ─────
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    return NextResponse.json({ error: "프로필 조회 실패" }, { status: 401 });
+  }
+
+  const { count: existingCount } = await supabase
+    .from("datasets")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  const limit = checkDatasetLimit(profile, existingCount ?? 0);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      {
+        error: "Dataset limit reached",
+        message:
+          profile.tier === "basic"
+            ? `베이직은 데이터셋 ${TIER_LIMITS.basic.monthly_datasets}개까지 가능합니다. ` +
+              `기존 데이터셋을 삭제하거나, Pro로 업그레이드하면 무제한 사용 가능합니다.`
+            : "데이터셋 한도에 도달했습니다.",
+        tier: profile.tier,
+        current: limit.current,
+        limit: limit.limit,
+      },
+      { status: 403 }
+    );
+  }
 
   const { data: dataset, error } = await supabase
     .from("datasets")

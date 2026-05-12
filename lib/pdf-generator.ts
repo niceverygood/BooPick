@@ -279,6 +279,31 @@ async function buildHTML(input: PDFGenInput): Promise<string> {
       .join(" / 07\n");
   }
 
+  // ───── Basic 워터마크 (모든 페이지 우측 하단) ─────
+  //   Pro는 워터마크 X. CSS @page에서 fixed 포지셔닝으로 매 페이지 노출.
+  if (!isPro) {
+    const watermarkCSS = `
+    .boopick-watermark {
+      position: fixed;
+      bottom: 6mm;
+      right: 16mm;
+      font-size: 7pt;
+      color: #94A3B8;
+      letter-spacing: 0.5pt;
+      opacity: 0.85;
+      z-index: 9999;
+      pointer-events: none;
+    }
+    .boopick-watermark strong { color: #B45309; font-weight: 700; }
+    `;
+    tpl = tpl
+      .replace("</style>", watermarkCSS + "\n  </style>")
+      .replace(
+        "</body>",
+        `<div class="boopick-watermark"><strong>부픽</strong> BETA · boo-pick.vercel.app</div>\n</body>`
+      );
+  }
+
   return tpl;
 }
 
