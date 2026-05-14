@@ -2,12 +2,16 @@
 
 // V3 산업군 선택 UI
 //
-// 정렬 정책 (사장님 의뢰 빈도순):
-//   V1 작동: 일반 사무실(누구나) → 결혼정보회사(Pro)
-//   V2 준비중: 음식점 → 카페 → 학원 → 미용실 → 병원 → 헬스 → 술집 → 법무법인
+// 정렬: 임대 의뢰 빈도순 (단일 줄)
+//   사무실(35%) → 음식점(25%) → 카페(10%) → 학원(8%) → 미용실(5%)
+//   → 병원(5%) → 헬스(4%) → 술집(4%) → 법무(2%) → 결정사(1%)
 //
-// 결정사는 검증 케이스라 V1에 살아있지만 첫 자리 X — 사장님 실제 의뢰는
-// 사무실·음식점이 압도적으로 많음.
+// 작동 상태:
+//   - available=true: 클릭 가능 (사무실, 결혼정보회사)
+//   - available=false: V2 준비중 (나머지 8종)
+//
+// Pro 전용 여부는 PRO 배지로 표시 — 결정사만 해당.
+// 그룹 분리 X — 결정사도 다른 V2 후보와 동일 라인.
 
 import { useState } from "react";
 
@@ -18,14 +22,9 @@ export interface IndustryOption {
   pro_only: boolean;
 }
 
-// V1 작동 (현재 분석 가능) — 자주 쓰는 순
-export const V1_INDUSTRIES: IndustryOption[] = [
+// 임대 의뢰 빈도순 (강남·판교 상업 임대 시장 추정)
+export const INDUSTRIES: IndustryOption[] = [
   { id: "사무실", label: "🏢 일반 사무실", available: true, pro_only: false },
-  { id: "결혼정보회사", label: "💍 결혼정보회사", available: true, pro_only: true },
-];
-
-// V2 준비중 — 임대 의뢰 빈도순
-export const V2_INDUSTRIES: IndustryOption[] = [
   { id: "음식점", label: "🍽️ 음식점", available: false, pro_only: false },
   { id: "카페", label: "☕ 카페", available: false, pro_only: false },
   { id: "학원", label: "📚 학원", available: false, pro_only: false },
@@ -34,10 +33,8 @@ export const V2_INDUSTRIES: IndustryOption[] = [
   { id: "헬스/필라테스", label: "🧘 헬스/필라테스", available: false, pro_only: false },
   { id: "술집", label: "🍻 술집", available: false, pro_only: false },
   { id: "법무법인", label: "⚖️ 법무법인", available: false, pro_only: false },
+  { id: "결혼정보회사", label: "💍 결혼정보회사", available: true, pro_only: true },
 ];
-
-// 전체 (lib 다른 곳에서 import해서 사용 — 검증·매핑용)
-export const INDUSTRIES: IndustryOption[] = [...V1_INDUSTRIES, ...V2_INDUSTRIES];
 
 interface Props {
   value: string | null;
@@ -70,68 +67,51 @@ export function IndustrySelector({ value, onChange, isPro = false }: Props) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* ──────── V1 — 작동 가능 ──────── */}
-      <div>
-        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-          지금 분석 가능
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            className={btnClass(value == null)}
-          >
-            선택 안 함
-          </button>
-          {V1_INDUSTRIES.map((opt) => {
-            const locked = opt.pro_only && !isPro;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => handleClick(opt)}
-                title={
-                  locked ? "Pro 티어 전용 — 클릭해서 안내 보기" : ""
-                }
-                className={
-                  btnClass(value === opt.id) + (locked ? " opacity-60" : "")
-                }
-              >
-                {opt.label}
-                {opt.pro_only && (
-                  <span className="ml-1 text-[10px] font-bold text-boopick-orange">
-                    PRO
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ──────── V2 — 준비중 (의뢰 빈도순) ──────── */}
-      <div>
-        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-          V2 추가 예정 · 의뢰 빈도순
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {V2_INDUSTRIES.map((opt) => (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={btnClass(value == null)}
+        >
+          선택 안 함
+        </button>
+        {INDUSTRIES.map((opt) => {
+          const locked = !opt.available || (opt.pro_only && !isPro);
+          return (
             <button
               key={opt.id}
               type="button"
               onClick={() => handleClick(opt)}
-              title="V2에 추가 예정 — 클릭해서 안내 보기"
-              className={btnClass(false) + " opacity-50"}
+              title={
+                !opt.available
+                  ? "V2 추가 예정 — 클릭해서 안내 보기"
+                  : opt.pro_only && !isPro
+                  ? "Pro 티어 전용 — 클릭해서 안내 보기"
+                  : ""
+              }
+              className={
+                btnClass(value === opt.id) +
+                (locked ? " opacity-50" : "")
+              }
             >
               {opt.label}
-              <span className="ml-1 text-[10px] text-slate-400">(준비중)</span>
+              {opt.pro_only && (
+                <span className="ml-1 text-[10px] font-bold text-boopick-orange">
+                  PRO
+                </span>
+              )}
+              {!opt.available && (
+                <span className="ml-1 text-[10px] text-slate-400">
+                  (준비중)
+                </span>
+              )}
             </button>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* 인라인 안내 (Pro전용+basic유저) */}
+      {/* 인라인 안내 (Pro전용 + basic 유저인 경우) */}
       {value &&
         INDUSTRIES.find((i) => i.id === value)?.pro_only &&
         !isPro && (
