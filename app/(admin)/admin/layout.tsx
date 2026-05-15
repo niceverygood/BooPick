@@ -4,7 +4,10 @@ import { getCurrentProfile, isAdmin } from "@/lib/tier-check";
 
 export const dynamic = "force-dynamic";
 
-const NAV = [{ href: "/admin/users", label: "사용자" }];
+const NAV = [
+  { href: "/admin/users", label: "사용자" },
+  { href: "/admin/crawler", label: "크롤러" },
+];
 
 export default async function AdminLayout({
   children,
