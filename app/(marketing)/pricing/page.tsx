@@ -40,10 +40,10 @@ const PLANS: Plan[] = [
   },
   {
     id: "pro",
-    name: "Pro (베타)",
-    price: "0",
-    suffix: "원/월 · 베타",
-    hint: "정식 출시 후 49,000원/월",
+    name: "Pro",
+    price: "49,000",
+    suffix: "원/월 (VAT 포함)",
+    hint: "월 정기 결제 · 언제든 해지 가능",
     bullets: [
       { ok: true, text: "베이직 모든 기능" },
       { ok: true, text: `월 ${PRO_LIMIT}건 PDF 리포트` },
@@ -51,10 +51,11 @@ const PLANS: Plan[] = [
       { ok: true, text: "매물별 4가지 강·약점 자동 분석" },
       { ok: true, text: "QR 코드 (모바일 즉시 매물 확인)" },
       { ok: true, text: "네이버부동산 클릭 가능 링크" },
-      { ok: true, text: "V2 추가 산업 (음식점·병원·학원 등) 우선 액세스" },
+      { ok: true, text: "추가 산업 (음식점·병원·학원 등) 우선 액세스" },
+      { ok: true, text: "세금계산서 발행" },
     ],
-    cta: "Pro 베타 신청",
-    href: "/signup?tier=pro",
+    cta: "Pro 구독하기",
+    href: "/checkout",
     recommended: true,
   },
 ];
@@ -133,13 +134,16 @@ export default function PricingPage() {
         ))}
       </div>
 
-      <div className="mt-8 max-w-2xl mx-auto text-center space-y-2 text-xs text-slate-500">
-        <p>
-          베타 기간 동안 Pro 신청자는 한대표가 24시간 내 검토 후 수동 승격 안내드립니다.
-        </p>
-        <p>
-          정식 출시 시점에 Pro 가격(49,000원/월)이 적용되며, 베타 사용자는 별도 안내드립니다.
-        </p>
+      <div className="mt-10 max-w-2xl mx-auto space-y-4 text-sm">
+        <div className="rounded-md border border-slate-200 bg-white p-4">
+          <p className="font-semibold text-boopick-navy mb-2">구독 안내</p>
+          <ul className="space-y-1.5 text-slate-600 text-xs leading-relaxed">
+            <li>· Pro 는 월 자동 정기결제이며, 결제일 24시간 전까지 해지하면 다음 달부터 과금되지 않습니다.</li>
+            <li>· 결제 7일 내 미사용 시 100% 환불 가능합니다. 자세한 내용은 <Link href="/refund" className="text-boopick-orange underline">환불 정책</Link> 참고.</li>
+            <li>· 결제 수단: 카카오페이, 신용/체크카드, 가상계좌. 세금계산서 발행 가능.</li>
+            <li>· 분석 결과는 참고용 정보이며, 의사결정 책임은 사용자에게 있습니다 (<Link href="/terms" className="text-boopick-orange underline">이용약관</Link>).</li>
+          </ul>
+        </div>
       </div>
     </main>
   );
