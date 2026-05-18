@@ -1,0 +1,51 @@
+<svg
+  width="1024"
+  height="1024"
+  viewBox="0 0 1024 1024"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-label="부픽 (BooPick) 모노톤 아이콘 — 밝은 배경용"
+>
+  <!-- 단색 네이비 — 밝은 배경(인쇄·다크UI 위 흰박스·명함 등) 용 -->
+  <!-- 배경 투명. 모든 요소 #1A2E4C 단색. -->
+
+  <!-- 둥근 사각 프레임 (테두리만, 안쪽 비움 — 윤곽선 식별용) -->
+  <rect x="48" y="48" width="928" height="928" rx="208" fill="none" stroke="#1A2E4C" stroke-width="32" />
+
+  <!-- 집 본체 -->
+  <path
+    d="
+      M 512 280
+      L 760 484
+      L 760 760
+      Q 760 800 720 800
+      L 304 800
+      Q 264 800 264 760
+      L 264 484
+      Z
+    "
+    fill="#1A2E4C"
+  />
+
+  <!-- 창문 2개 (음각 — 흰색 punch out 대신 라운드 사각 도려냄을 흰 박스로 표현) -->
+  <g fill="#FFFFFF">
+    <rect x="340" y="540" width="100" height="100" rx="14" />
+    <rect x="584" y="540" width="100" height="100" rx="14" />
+  </g>
+
+  <!-- 출입구 (음각) -->
+  <rect x="462" y="640" width="100" height="160" rx="14" fill="#FFFFFF" />
+
+  <!-- Pick 체크 배지 -->
+  <g transform="translate(770 240)">
+    <circle cx="0" cy="0" r="118" fill="#1A2E4C" />
+    <path
+      d="M -50 4 L -14 40 L 56 -38"
+      stroke="#FFFFFF"
+      stroke-width="26"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+  </g>
+</svg>

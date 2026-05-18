@@ -4,10 +4,15 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
+const SITE_URL = "https://boo-pick.vercel.app";
+const SITE_TITLE = "부픽 (BooPick) — 매물 분석 SaaS";
+const SITE_DESC =
+  "공인중개사 보유 매물 데이터를 의뢰 조건에 맞춰 분석하고 PDF 리포트로 출력하는 SaaS 도구. 매물 40,000건을 30초에 분석.";
+
 export const metadata: Metadata = {
-  title: "부픽 (BooPick) — 매물 분석 SaaS",
-  description:
-    "공인중개사 매물 데이터 40,000건을 30초 안에 분석해 업종 맞춤 리포트로 받아보세요.",
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESC,
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -17,6 +22,28 @@ export const metadata: Metadata = {
       { url: "/img/icon.svg", type: "image/svg+xml" },
     ],
     apple: [{ url: "/img/icon-180.png", sizes: "180x180", type: "image/png" }],
+  },
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    url: SITE_URL,
+    title: SITE_TITLE,
+    description: SITE_DESC,
+    siteName: "부픽",
+    images: [
+      {
+        url: "/img/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "부픽 — 공인중개사 매물 분석 SaaS",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESC,
+    images: ["/img/og-image.png"],
   },
 };
 

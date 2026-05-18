@@ -1,0 +1,92 @@
+<svg
+  width="640"
+  height="160"
+  viewBox="0 0 640 160"
+  xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-label="부픽 (BooPick) 로고타입"
+>
+  <defs>
+    <linearGradient id="markBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#243C60" />
+      <stop offset="100%" stop-color="#1A2E4C" />
+    </linearGradient>
+    <linearGradient id="markPick" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF8E61" />
+      <stop offset="100%" stop-color="#FF7849" />
+    </linearGradient>
+  </defs>
+
+  <!-- 좌측 미니 아이콘 (높이 128, 22.4% 라운드) -->
+  <g transform="translate(16 16)">
+    <rect x="0" y="0" width="128" height="128" rx="28.6" fill="url(#markBg)" />
+    <!-- 집 -->
+    <g transform="translate(0 0) scale(0.125)">
+      <path
+        d="
+          M 512 256
+          L 776 472
+          L 776 760
+          Q 776 800 736 800
+          L 288 800
+          Q 248 800 248 760
+          L 248 472
+          Z
+        "
+        fill="#FFFAF3"
+      />
+      <path
+        d="M 232 480 L 512 252 L 792 480"
+        stroke="#FFFAF3"
+        stroke-width="48"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"
+      />
+      <g fill="#1A2E4C">
+        <rect x="332" y="540" width="100" height="100" rx="14" />
+        <rect x="592" y="540" width="100" height="100" rx="14" />
+      </g>
+      <rect x="460" y="640" width="104" height="160" rx="14" fill="#FF7849" />
+    </g>
+    <!-- Pick 체크 (우상단) -->
+    <g transform="translate(96 30)">
+      <circle cx="0" cy="0" r="18" fill="url(#markPick)" />
+      <path
+        d="M -7.5 0.6 L -2 6 L 8 -5.5"
+        stroke="#FFFFFF"
+        stroke-width="3.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"
+      />
+    </g>
+  </g>
+
+  <!-- 워드마크 — "부픽" + sub "BooPick" -->
+  <g transform="translate(176 0)">
+    <!-- 한글 "부픽" — 큰 메인 타이틀 -->
+    <text
+      x="0"
+      y="98"
+      font-family="-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Pretendard', 'Noto Sans KR', sans-serif"
+      font-size="84"
+      font-weight="800"
+      fill="#1A2E4C"
+      letter-spacing="-2"
+    >부픽</text>
+
+    <!-- 영문 sub — BooPick (액센트 점은 오렌지) -->
+    <text
+      x="2"
+      y="134"
+      font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', sans-serif"
+      font-size="20"
+      font-weight="600"
+      fill="#64748B"
+      letter-spacing="2"
+    >BOOPICK</text>
+    <!-- 오렌지 액센트 점 -->
+    <circle cx="142" cy="128" r="4" fill="#FF7849" />
+  </g>
+</svg>

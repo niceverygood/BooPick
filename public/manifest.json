@@ -1,7 +1,7 @@
 {
   "name": "부픽 (BooPick)",
   "short_name": "부픽",
-  "description": "공인중개사를 위한 AI 매물 매칭 + 공동중개 풀",
+  "description": "공인중개사 매물 데이터 분석 SaaS 도구 — 보유 매물을 업종 조건에 맞춰 분석하고 PDF 리포트로 출력",
   "lang": "ko",
   "start_url": "/",
   "scope": "/",
