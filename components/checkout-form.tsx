@@ -1,16 +1,17 @@
 "use client";
 
-// 부픽 Pro 구독 결제 폼
+// 부픽 결제 폼 — 단건 / 정기 둘 다 지원
 //
-// 카카오페이 심사 요구사항 충족:
-//   - 상품(Pro 구독) 명확히 표시
-//   - 구매자 정보 + 약관 동의 + 결제 수단 선택
-//   - "결제하기" 버튼까지 완전한 흐름 (실제 PG 연동 전 단계)
-//
-// 실제 결제 연동은 추후 (PG: KakaoPay / Toss). 현재는 신청서 → 한대표 수동 활성화 fallback.
+// 흐름:
+//   1. 사용자가 결제 종류(정기/단건) + 금액 + 약관 동의
+//   2. POST /api/payment/kakao/ready → next_redirect_pc_url / mobile_url 수신
+//   3. window.location.href = 모바일이면 mobile_url, PC면 pc_url
+//   4. 카카오페이 인증 후 자동 redirect:
+//      - 성공 → /checkout/success
+//      - 취소 → /checkout/cancel
+//      - 실패 → /checkout/fail
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,30 +24,36 @@ interface Props {
   defaultName?: string | null;
 }
 
-type PayMethod = "kakaopay" | "card" | "vbank";
+type PlanType = "subscription" | "onetime";
+
+const PRO_PRICE = 49_000;
+const ONETIME_DEFAULT = 9_900;
 
 export function CheckoutForm({ defaultEmail, defaultName }: Props) {
-  const router = useRouter();
+  const [planType, setPlanType] = useState<PlanType>("subscription");
+  const [onetimeAmount, setOnetimeAmount] = useState(ONETIME_DEFAULT);
 
   const [email, setEmail] = useState(defaultEmail ?? "");
   const [name, setName] = useState(defaultName ?? "");
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
   const [bizNo, setBizNo] = useState("");
-  const [payMethod, setPayMethod] = useState<PayMethod>("kakaopay");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const [agreeRefund, setAgreeRefund] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const allAgreed = agreeTerms && agreePrivacy && agreeRefund;
+  const amount = planType === "subscription" ? PRO_PRICE : onetimeAmount;
   const canSubmit =
     !!email.trim() &&
     !!name.trim() &&
     !!phone.trim() &&
     !!company.trim() &&
     allAgreed &&
+    amount > 0 &&
     !submitting;
 
   function toggleAll(v: boolean) {
@@ -61,42 +68,99 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
     setErr(null);
     setSubmitting(true);
     try {
-      // 카카오페이 심사 단계 — 실제 PG 연동은 추후. 현재는 신청서로 처리.
-      const res = await fetch("/api/checkout/request", {
+      const res = await fetch("/api/payment/kakao/ready", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: email.trim(),
-          name: name.trim(),
-          phone: phone.trim(),
-          company: company.trim(),
-          biz_no: bizNo.trim() || null,
-          pay_method: payMethod,
-          plan: "pro",
-          price_won: 49000,
+          type: planType,
+          amount: planType === "onetime" ? onetimeAmount : undefined,
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error ?? "결제 요청 처리 실패");
+        throw new Error(data.error ?? "결제 준비 실패");
       }
-      router.push("/checkout/complete");
+
+      // 모바일/PC 분기 — UA 단순 휴리스틱
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      const redirectUrl = isMobile
+        ? data.next_redirect_mobile_url
+        : data.next_redirect_pc_url;
+      if (!redirectUrl) {
+        throw new Error("카카오페이 redirect URL 누락");
+      }
+      // 카카오페이 결제창으로 이동
+      window.location.href = redirectUrl;
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "결제 요청 실패");
+      setErr(e instanceof Error ? e.message : "결제 준비 실패");
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1fr_360px]">
-      {/* LEFT — 구매자 정보 + 결제 수단 + 약관 */}
+    <form
+      onSubmit={handleSubmit}
+      className="grid gap-6 lg:grid-cols-[1fr_360px]"
+    >
+      {/* LEFT */}
       <div className="space-y-5">
+        {/* 결제 종류 선택 */}
+        <Card>
+          <CardContent className="p-5 sm:p-6 space-y-3">
+            <h2 className="text-base font-bold text-boopick-navy">
+              ① 결제 종류
+            </h2>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <PlanCard
+                selected={planType === "subscription"}
+                onClick={() => setPlanType("subscription")}
+                title="월 구독 (Pro)"
+                price="49,000원"
+                sub="매월 자동 결제 · 언제든 해지"
+                badge="추천"
+              />
+              <PlanCard
+                selected={planType === "onetime"}
+                onClick={() => setPlanType("onetime")}
+                title="단건 결제"
+                price={`${onetimeAmount.toLocaleString()}원`}
+                sub="1회 한정 · 자동 갱신 없음"
+              />
+            </div>
+
+            {planType === "onetime" && (
+              <div className="pt-3 border-t border-slate-100">
+                <Label htmlFor="onetime-amount" className="text-sm">
+                  단건 결제 금액 (원)
+                </Label>
+                <Input
+                  id="onetime-amount"
+                  type="number"
+                  min={1000}
+                  max={1000000}
+                  step={100}
+                  value={onetimeAmount}
+                  onChange={(e) =>
+                    setOnetimeAmount(
+                      Math.max(1000, Math.min(1000000, Number(e.target.value) || 0))
+                    )
+                  }
+                  className="mt-1.5"
+                />
+                <p className="text-xs text-slate-500 mt-1.5">
+                  1,000원 ~ 1,000,000원. 단건 결제는 자동 갱신되지 않습니다.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 구매자 정보 */}
         <Card>
           <CardContent className="p-5 sm:p-6 space-y-4">
             <h2 className="text-base font-bold text-boopick-navy">
-              ① 구매자 정보
+              ② 구매자 정보
             </h2>
-
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="email" className="text-sm">
@@ -109,7 +173,6 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="mt-1.5"
-                  placeholder="hello@bottle.kr"
                 />
               </div>
               <div>
@@ -122,7 +185,6 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
                   onChange={(e) => setName(e.target.value)}
                   required
                   className="mt-1.5"
-                  placeholder="홍길동"
                 />
               </div>
               <div>
@@ -171,58 +233,12 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-5 sm:p-6 space-y-4">
-            <h2 className="text-base font-bold text-boopick-navy">
-              ② 결제 수단
-            </h2>
-            <div className="grid sm:grid-cols-3 gap-3">
-              {(
-                [
-                  { id: "kakaopay", label: "카카오페이", sub: "간편결제" },
-                  { id: "card", label: "신용/체크카드", sub: "국내 카드" },
-                  { id: "vbank", label: "가상계좌", sub: "무통장 입금" },
-                ] as { id: PayMethod; label: string; sub: string }[]
-              ).map((m) => (
-                <label
-                  key={m.id}
-                  className={`cursor-pointer rounded-md border p-3 text-center transition ${
-                    payMethod === m.id
-                      ? "border-boopick-orange ring-2 ring-boopick-orange/30 bg-amber-50/40"
-                      : "border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="pay-method"
-                    value={m.id}
-                    checked={payMethod === m.id}
-                    onChange={() => setPayMethod(m.id)}
-                    className="sr-only"
-                  />
-                  <div className="text-sm font-semibold text-boopick-navy">
-                    {m.label}
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    {m.sub}
-                  </div>
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500">
-              현재 베타 기간 동안에는 결제 요청 접수 후 한대표가 검토하여 수동
-              활성화 안내드립니다. PG 연동(KakaoPay / Toss)은 정식 출시 시
-              자동화됩니다.
-            </p>
-          </CardContent>
-        </Card>
-
+        {/* 약관 */}
         <Card>
           <CardContent className="p-5 sm:p-6 space-y-3">
             <h2 className="text-base font-bold text-boopick-navy">
               ③ 약관 동의
             </h2>
-
             <label className="flex items-start gap-2 cursor-pointer p-2 -mx-2 rounded hover:bg-slate-50">
               <input
                 type="checkbox"
@@ -235,7 +251,6 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
               </span>
             </label>
             <Separator />
-
             <CheckRow
               checked={agreeTerms}
               onChange={setAgreeTerms}
@@ -259,37 +274,39 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
               <p className="font-semibold mb-0.5">⚠️ 분석 도구 안내</p>
               <p>
                 부픽은 공인중개사가 보유한 매물 데이터를 분석하는 소프트웨어
-                도구입니다. <strong>매물 추천 · 중개 · 매매 알선 서비스가
-                아니며</strong>, 분석 결과는 참고용으로 모든 의사결정과 결과의
-                책임은 사용자에게 있습니다.
+                도구입니다. <strong>매물 추천 · 중개 · 매매 알선이 아니며</strong>,
+                분석 결과의 의사결정 책임은 사용자에게 있습니다.
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* RIGHT — 주문 요약 + 결제 버튼 */}
+      {/* RIGHT */}
       <aside>
         <Card className="sticky top-20">
           <CardContent className="p-5 sm:p-6 space-y-4">
             <h2 className="text-base font-bold text-boopick-navy">주문 요약</h2>
             <Separator />
-
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-600">상품</span>
                 <span className="font-semibold text-boopick-navy">
-                  부픽 Pro 구독
+                  {planType === "subscription"
+                    ? "부픽 Pro 구독"
+                    : "부픽 단건 결제"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">결제 주기</span>
-                <span className="text-boopick-navy">월 정기 (1개월)</span>
+                <span className="text-boopick-navy">
+                  {planType === "subscription" ? "월 자동 결제" : "1회"}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">월 정가</span>
+                <span className="text-slate-600">금액</span>
                 <span className="text-boopick-navy tabular-nums">
-                  49,000원
+                  {amount.toLocaleString()}원
                 </span>
               </div>
               <div className="flex justify-between">
@@ -305,16 +322,17 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
                 결제 금액
               </span>
               <span className="text-2xl font-bold text-boopick-orange tabular-nums">
-                49,000<span className="text-sm ml-0.5">원</span>
+                {amount.toLocaleString()}
+                <span className="text-sm ml-0.5">원</span>
               </span>
             </div>
 
             <Button
               type="submit"
               disabled={!canSubmit}
-              className="w-full h-12 text-base bg-boopick-orange hover:bg-boopick-orange/90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-12 text-base bg-[#FFEB00] hover:bg-[#FFEB00]/90 text-[#3C1E1E] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? "처리 중…" : "결제하기"}
+              {submitting ? "처리 중…" : "카카오페이로 결제하기"}
             </Button>
 
             {err && (
@@ -324,9 +342,18 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
             )}
 
             <ul className="text-[11px] text-slate-500 space-y-1 leading-relaxed">
-              <li>· 결제 즉시 Pro 기능이 활성화됩니다.</li>
-              <li>· 결제 7일 내 미사용 시 100% 환불 가능합니다.</li>
-              <li>· 자동 갱신은 다음 결제일 24시간 전까지 해지 가능합니다.</li>
+              {planType === "subscription" ? (
+                <>
+                  <li>· 매월 같은 날짜에 자동 결제됩니다.</li>
+                  <li>· 다음 결제일 24시간 전까지 해지 가능 (대시보드).</li>
+                  <li>· 결제 7일 내 미사용 시 100% 환불.</li>
+                </>
+              ) : (
+                <>
+                  <li>· 1회 결제이며 자동 갱신되지 않습니다.</li>
+                  <li>· 결제 7일 내 미사용 시 100% 환불.</li>
+                </>
+              )}
               <li>
                 · 자세한 환불 정책은{" "}
                 <Link href="/refund" className="text-boopick-orange underline">
@@ -339,6 +366,45 @@ export function CheckoutForm({ defaultEmail, defaultName }: Props) {
         </Card>
       </aside>
     </form>
+  );
+}
+
+function PlanCard({
+  selected,
+  onClick,
+  title,
+  price,
+  sub,
+  badge,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  title: string;
+  price: string;
+  sub: string;
+  badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative text-left rounded-md border p-4 transition ${
+        selected
+          ? "border-boopick-orange ring-2 ring-boopick-orange/30 bg-amber-50/40"
+          : "border-slate-200 hover:border-slate-300"
+      }`}
+    >
+      {badge && (
+        <span className="absolute -top-2 right-3 px-2 py-0.5 rounded-full bg-boopick-orange text-white text-[10px] font-semibold">
+          {badge}
+        </span>
+      )}
+      <div className="font-bold text-boopick-navy">{title}</div>
+      <div className="text-xl font-bold text-boopick-orange mt-1 tabular-nums">
+        {price}
+      </div>
+      <div className="text-[11px] text-slate-500 mt-1">{sub}</div>
+    </button>
   );
 }
 
