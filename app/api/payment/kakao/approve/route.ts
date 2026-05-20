@@ -122,6 +122,7 @@ export async function GET(req: NextRequest) {
       sid: approveResp.sid,
       plan: "pro",
       amount_per_cycle: payment.total_amount,
+      billing_cycle: cycle === "yearly" ? "yearly" : "monthly",
       status: "active",
       started_at: new Date().toISOString(),
       last_charged_at: approveResp.approved_at,
