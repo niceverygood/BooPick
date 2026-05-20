@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import { Logo } from "@/components/brand";
 
 export default function MarketingLayout({
   children,
@@ -7,43 +7,33 @@ export default function MarketingLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-boopick-cream">
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/img/icon-192.png"
-              alt="부픽"
-              width={28}
-              height={28}
-              className="rounded-md"
-            />
-            <span className="font-bold text-boopick-navy">부픽</span>
+    <div className="min-h-screen bg-cream-100">
+      <header className="border-b border-[rgba(10,37,64,0.08)] bg-cream-100/85 backdrop-blur sticky top-0 z-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <Link href="/" aria-label="부픽 홈">
+            <Logo size={22} />
           </Link>
-          <nav className="flex items-center gap-3 sm:gap-5 text-sm">
+          <nav className="flex items-center gap-2 sm:gap-4 text-sm">
             <Link
               href="/pricing"
-              className="text-slate-600 hover:text-boopick-navy font-medium"
+              className="px-2.5 py-1.5 text-slate-700 hover:text-navy-800 font-medium"
             >
               가격
             </Link>
             <Link
               href="/checkout"
-              className="hidden sm:inline text-slate-600 hover:text-boopick-orange font-medium"
+              className="hidden sm:inline px-2.5 py-1.5 text-slate-700 hover:text-brand-orange-600 font-medium"
             >
               Pro 구독
             </Link>
             <Link
               href="/login"
-              className="text-slate-600 hover:text-boopick-navy font-medium"
+              className="bp-btn bp-btn-ghost bp-btn-md hidden sm:inline-flex"
             >
               로그인
             </Link>
-            <Link
-              href="/signup"
-              className="px-4 py-1.5 rounded-md bg-boopick-navy hover:bg-boopick-navy/90 text-white font-semibold text-sm"
-            >
-              무료 시작
+            <Link href="/signup" className="bp-btn bp-btn-secondary bp-btn-md">
+              무료로 시작
             </Link>
           </nav>
         </div>

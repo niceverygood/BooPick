@@ -1,3 +1,5 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -38,11 +40,82 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* 부픽 브랜드 컬러 */
-    --boopick-navy: 217 49% 20%;
-    --boopick-orange: 13 100% 64%;
-    --boopick-green: 160 84% 39%;
-    --boopick-cream: 30 100% 98%;
+    /* ===== 부픽 브랜드 (HSL — Tailwind boopick.* alias 용) ===== */
+    /* 프로토타입 정확값: navy #0a2540 / orange #ff6b35 / cream #faf7f2 / green #16a34a */
+    --boopick-navy: 210 73% 14%;
+    --boopick-orange: 16 100% 60%;
+    --boopick-green: 142 71% 45%;
+    --boopick-cream: 38 44% 96%;
+
+    /* ===== 부픽 디자인 토큰 (프로토타입 이식 — bp-* 클래스/인라인 공용) ===== */
+    --navy-50:  #f1f5fa;
+    --navy-100: #dbe5f0;
+    --navy-200: #b8c9dd;
+    --navy-300: #88a3c2;
+    --navy-400: #4e6e94;
+    --navy-500: #1f3f6a;
+    --navy-600: #14305a;
+    --navy-700: #0d264c;
+    --navy-800: #0a2540;   /* primary */
+    --navy-900: #061a30;
+
+    --orange-50:  #fff4ec;
+    --orange-100: #ffe1cf;
+    --orange-200: #ffc0a0;
+    --orange-300: #ff9b6d;
+    --orange-400: #ff7d44;
+    --orange-500: #ff6b35;  /* accent */
+    --orange-600: #ec5520;
+    --orange-700: #c43d10;
+    --orange-800: #8c2a0a;
+
+    --cream-50:  #fdfcf9;
+    --cream-100: #faf7f2;   /* surface */
+    --cream-200: #f3eee4;
+    --cream-300: #e8e0d0;
+
+    --slate-50:  #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+
+    /* Semantic */
+    --safe: #16a34a;
+    --safe-bg: #e7f6ec;
+    --safe-bd: #b6e2c2;
+    --warn: #d97706;
+    --warn-strong: #b45309;
+    --warn-bg: #fef2da;
+    --warn-bd: #f9d99a;
+    --risk: #dc2626;
+    --risk-bg: #fde9e9;
+    --risk-bd: #f3b8b8;
+
+    /* Kakao */
+    --kakao: #FEE500;
+    --kakao-ink: #181600;
+
+    /* Radius / shadow */
+    --r-4: 4px;
+    --r-8: 8px;
+    --r-12: 12px;
+    --r-16: 16px;
+    --r-24: 24px;
+    --r-full: 999px;
+    --sh-sm: 0 1px 2px rgba(10, 37, 64, 0.05), 0 1px 1px rgba(10, 37, 64, 0.04);
+    --sh-md: 0 6px 18px -8px rgba(10, 37, 64, 0.18), 0 2px 6px rgba(10, 37, 64, 0.06);
+    --sh-lg: 0 24px 60px -20px rgba(10, 37, 64, 0.28), 0 8px 24px -12px rgba(10, 37, 64, 0.14);
+    --sh-ring: 0 0 0 4px rgba(255, 107, 53, 0.18);
+
+    /* Fonts */
+    --font-kr: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --font-num: var(--font-inter), "Pretendard Variable", system-ui, sans-serif;
   }
 
   .dark {
@@ -87,5 +160,152 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-kr);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+  }
+  /* 숫자·금액은 Inter tabular */
+  .num,
+  [data-num] {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* ===========================================================
+   부픽 컴포넌트 레이어 (프로토타입 bp-* 이식)
+   =========================================================== */
+@layer components {
+  /* Buttons */
+  .bp-btn {
+    @apply inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap select-none cursor-pointer;
+    border: 1px solid transparent;
+    border-radius: var(--r-8);
+    transition: transform 0.12s ease, box-shadow 0.15s, background 0.15s,
+      border-color 0.15s, color 0.15s;
+  }
+  .bp-btn:active {
+    transform: translateY(1px);
+  }
+  .bp-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--sh-ring);
+  }
+  .bp-btn-primary {
+    background: var(--orange-500);
+    color: #fff;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04),
+      0 6px 16px -8px rgba(255, 107, 53, 0.55);
+  }
+  .bp-btn-primary:hover {
+    background: var(--orange-600);
+  }
+  .bp-btn-secondary {
+    background: #fff;
+    color: var(--navy-800);
+    border-color: var(--navy-800);
+  }
+  .bp-btn-secondary:hover {
+    background: var(--cream-100);
+  }
+  .bp-btn-ghost {
+    background: transparent;
+    color: var(--navy-800);
+  }
+  .bp-btn-ghost:hover {
+    background: var(--slate-100);
+  }
+  .bp-btn-kakao {
+    background: var(--kakao);
+    color: var(--kakao-ink);
+  }
+  .bp-btn-kakao:hover {
+    filter: brightness(0.96);
+  }
+  .bp-btn-sm {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  .bp-btn-md {
+    height: 40px;
+    padding: 0 16px;
+    font-size: 14px;
+  }
+  .bp-btn-lg {
+    height: 48px;
+    padding: 0 20px;
+    font-size: 15px;
+  }
+  .bp-btn-xl {
+    height: 56px;
+    padding: 0 24px;
+    font-size: 16px;
+    border-radius: var(--r-12);
+  }
+
+  /* Card */
+  .bp-card {
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--r-12);
+    box-shadow: var(--sh-sm);
+  }
+  .bp-card-hover {
+    transition: box-shadow 0.18s, transform 0.18s;
+  }
+  .bp-card-hover:hover {
+    box-shadow: var(--sh-md);
+    transform: translateY(-1px);
+  }
+
+  /* Signal pill (safe / warn / risk) */
+  .bp-signal {
+    @apply inline-flex items-center gap-2 font-semibold;
+    padding: 6px 12px 6px 8px;
+    border-radius: var(--r-full);
+    font-size: 13px;
+    border: 1px solid;
+  }
+  .bp-signal .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+  }
+  .bp-signal.safe {
+    background: var(--safe-bg);
+    border-color: var(--safe-bd);
+    color: #14532d;
+  }
+  .bp-signal.safe .dot {
+    background: var(--safe);
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+  }
+  .bp-signal.warn {
+    background: var(--warn-bg);
+    border-color: var(--warn-bd);
+    color: var(--warn-strong);
+  }
+  .bp-signal.warn .dot {
+    background: var(--warn);
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
+  }
+  .bp-signal.risk {
+    background: var(--risk-bg);
+    border-color: var(--risk-bd);
+    color: #7f1d1d;
+  }
+  .bp-signal.risk .dot {
+    background: var(--risk);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18);
+  }
+
+  /* Cream grid background */
+  .bp-grid-cream {
+    background-image: linear-gradient(var(--cream-200) 1px, transparent 1px),
+      linear-gradient(90deg, var(--cream-200) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-color: var(--cream-50);
   }
 }

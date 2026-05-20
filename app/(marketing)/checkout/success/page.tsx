@@ -7,12 +7,20 @@ export const metadata = {
 };
 
 interface Props {
-  searchParams: { type?: string; aid?: string };
+  searchParams: { cycle?: string; aid?: string };
 }
 
 export default function CheckoutSuccessPage({ searchParams }: Props) {
-  const isSubscription = searchParams.type === "subscription";
+  const cycle = searchParams.cycle;
   const aid = searchParams.aid ?? "";
+
+  const cycleLabel =
+    cycle === "yearly"
+      ? "연간 정기 구독 (Pro)"
+      : cycle === "monthly"
+      ? "월간 정기 구독 (Pro)"
+      : "단건 결제";
+  const isSubscription = cycle === "yearly" || cycle === "monthly";
 
   return (
     <main className="px-5 py-16 max-w-2xl mx-auto">
@@ -25,15 +33,17 @@ export default function CheckoutSuccessPage({ searchParams }: Props) {
             결제가 완료되었습니다
           </h1>
           <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-            {isSubscription
-              ? "Pro 구독이 활성화되었습니다. 매월 같은 날짜에 자동 결제됩니다."
+            {cycle === "yearly"
+              ? "Pro 연간 구독이 활성화되었습니다. 매년 동일자에 자동 갱신됩니다."
+              : cycle === "monthly"
+              ? "Pro 월간 구독이 활성화되었습니다. 매월 동일자에 자동 갱신됩니다."
               : "결제가 정상 처리되었습니다."}
           </p>
 
           <div className="mt-6 p-4 rounded-md bg-slate-50 text-left text-xs text-slate-600 space-y-1.5">
             <p>
               <strong className="text-boopick-navy">결제 유형:</strong>{" "}
-              {isSubscription ? "월 정기 결제 (Pro 구독)" : "단건 결제"}
+              {cycleLabel}
             </p>
             {aid && (
               <p>

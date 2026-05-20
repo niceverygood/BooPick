@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+// Inter 는 숫자·금액 전용 (.num / [data-num]). 본문 한글은 Pretendard (globals.css @import).
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 const SITE_URL = "https://boo-pick.vercel.app";
 const SITE_TITLE = "부픽 (BooPick) — 매물 분석 SaaS";
@@ -48,7 +49,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1A2E4C",
+  themeColor: "#0a2540",
   width: "device-width",
   initialScale: 1,
 };
@@ -59,8 +60,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
-      <body className={inter.className}>{children}</body>
+    <html lang="ko" className={inter.variable}>
+      <body>{children}</body>
     </html>
   );
 }
