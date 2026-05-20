@@ -11,6 +11,24 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Signal, type SignalLevel } from "@/components/brand";
+
+// 적합도 점수 → 신호 등급
+function scoreLevel(score: number): SignalLevel {
+  if (score >= 85) return "safe";
+  if (score >= 65) return "warn";
+  return "risk";
+}
+const LEVEL_LABEL: Record<SignalLevel, string> = {
+  safe: "적합",
+  warn: "검토",
+  risk: "주의",
+};
+const LEVEL_COLOR: Record<SignalLevel, string> = {
+  safe: "var(--safe)",
+  warn: "var(--warn)",
+  risk: "var(--risk)",
+};
 
 interface ScoreBreakdownItem {
   score: number;
@@ -170,6 +188,7 @@ function ListingCard({
   const naverUrl = row.article_no
     ? `https://m.land.naver.com/article/info/${row.article_no}`
     : null;
+  const level = scoreLevel(row.score);
 
   function handleCardClick(e: React.MouseEvent) {
     if (!isPro || !naverUrl) {
@@ -187,59 +206,64 @@ function ListingCard({
       }
     >
       <CardContent className="p-0">
-        {/* 헤더 */}
-        <div
-          className="p-4 sm:p-5 flex items-start justify-between gap-3 flex-wrap border-b border-slate-100"
-          onClick={handleCardClick}
-          title={
-            isPro
-              ? naverUrl
-                ? "클릭 시 네이버부동산 새 탭"
-                : "매물번호 없음"
-              : "Pro 업그레이드 시 매물 직접 확인 가능"
-          }
-        >
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-slate-400">
-                #{rank}
-              </span>
-              <p className="text-sm font-bold text-boopick-navy line-clamp-1">
-                {row.지역 ?? "—"} · {row.공급_평?.toFixed(1) ?? "—"}평 ·{" "}
-                {row.해당층 ?? "—"}층
+        {/* 헤더 — 좌측 신호 액센트 바 */}
+        <div className="flex items-stretch">
+          <span
+            className="w-1.5 shrink-0"
+            style={{ background: LEVEL_COLOR[level] }}
+            aria-hidden
+          />
+          <div
+            className="flex-1 p-4 sm:p-5 flex items-start justify-between gap-3 flex-wrap border-b border-slate-100 min-w-0"
+            onClick={handleCardClick}
+            title={
+              isPro
+                ? naverUrl
+                  ? "클릭 시 네이버부동산 새 탭"
+                  : "매물번호 없음"
+                : "Pro 업그레이드 시 매물 직접 확인 가능"
+            }
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="num text-xs font-bold text-slate-400">
+                  #{rank}
+                </span>
+                <Signal level={level} label={LEVEL_LABEL[level]} />
+                <p className="text-sm font-bold text-navy-800 line-clamp-1">
+                  {row.지역 ?? "—"} · {row.공급_평?.toFixed(1) ?? "—"}평 ·{" "}
+                  {row.해당층 ?? "—"}층
+                </p>
+                {row.article_no && (
+                  <Badge
+                    variant="outline"
+                    className="num bg-slate-50 text-slate-500 border-slate-200 text-[10px] font-normal"
+                  >
+                    #{row.article_no}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                {row.간략설명 ?? "—"}
               </p>
-              {row.article_no && (
-                <Badge
-                  variant="outline"
-                  className="bg-slate-50 text-slate-500 border-slate-200 text-[10px] font-normal"
-                >
-                  #{row.article_no}
-                </Badge>
-              )}
+              <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600 mt-2 num">
+                <span>월관 {formatMonthly(row)}</span>
+                <span className="text-slate-300">·</span>
+                <span>보증 {row.보증금 ? formatKRW(row.보증금) : "—"}</span>
+                <span className="text-slate-300">·</span>
+                <span>준공 {formatYearMonth(row.사용승인일)}</span>
+                {row.추천업종 && (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <span className="text-slate-500">{row.추천업종}</span>
+                  </>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-              {row.간략설명 ?? "—"}
-            </p>
-            <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600 mt-2">
-              <span>월관 {formatMonthly(row)}</span>
-              <span className="text-slate-300">·</span>
-              <span>
-                보증{" "}
-                {row.보증금 ? formatKRW(row.보증금) : "—"}
-              </span>
-              <span className="text-slate-300">·</span>
-              <span>준공 {formatYearMonth(row.사용승인일)}</span>
-              {row.추천업종 && (
-                <>
-                  <span className="text-slate-300">·</span>
-                  <span className="text-slate-500">{row.추천업종}</span>
-                </>
-              )}
+            <div className="text-right shrink-0">
+              <ScoreBadge score={row.score} large />
+              <p className="num text-[10px] text-slate-400 mt-1">/ 100점</p>
             </div>
-          </div>
-          <div className="text-right shrink-0">
-            <ScoreBadge score={row.score} large />
-            <p className="text-[10px] text-slate-400 mt-1">/ 100점</p>
           </div>
         </div>
 
@@ -312,13 +336,11 @@ function ScoreBadge({
   large?: boolean;
 }) {
   const tone =
-    score >= 90
-      ? "bg-boopick-green/10 text-boopick-green border-boopick-green/30"
-      : score >= 70
-      ? "bg-boopick-orange/10 text-boopick-orange border-boopick-orange/30"
-      : score >= 50
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : "bg-slate-100 text-slate-500 border-slate-200";
+    score >= 85
+      ? "bg-[var(--safe-bg)] text-[#14532d] border-[var(--safe-bd)]"
+      : score >= 65
+      ? "bg-[var(--warn-bg)] text-[var(--warn-strong)] border-[var(--warn-bd)]"
+      : "bg-[var(--risk-bg)] text-[#7f1d1d] border-[var(--risk-bd)]";
   return (
     <span
       className={
