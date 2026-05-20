@@ -56,6 +56,8 @@ export interface ReadyParams {
   totalAmount: number;
   taxFreeAmount?: number;
   quantity?: number;
+  /** approval_url 에 추가로 붙일 query (예: { cycle: "yearly" }) — approve 라우트에서 사용 */
+  extraApprovalParams?: Record<string, string>;
 }
 
 export interface ReadyResponse {
@@ -71,6 +73,17 @@ export interface ReadyResponse {
 export async function ready(params: ReadyParams): Promise<ReadyResponse> {
   const cid = getCid(params.type);
   const site = getSiteUrl();
+
+  // approval_url 구성 — extra query 병합
+  const approvalUrl = new URL(`${site}/api/payment/kakao/approve`);
+  approvalUrl.searchParams.set("type", params.type);
+  approvalUrl.searchParams.set("order", params.partnerOrderId);
+  if (params.extraApprovalParams) {
+    for (const [k, v] of Object.entries(params.extraApprovalParams)) {
+      approvalUrl.searchParams.set(k, v);
+    }
+  }
+
   const body = {
     cid,
     partner_order_id: params.partnerOrderId,
@@ -79,7 +92,7 @@ export async function ready(params: ReadyParams): Promise<ReadyResponse> {
     quantity: params.quantity ?? 1,
     total_amount: params.totalAmount,
     tax_free_amount: params.taxFreeAmount ?? 0,
-    approval_url: `${site}/api/payment/kakao/approve?type=${params.type}&order=${encodeURIComponent(params.partnerOrderId)}`,
+    approval_url: approvalUrl.toString(),
     cancel_url: `${site}/api/payment/kakao/cancel?order=${encodeURIComponent(params.partnerOrderId)}`,
     fail_url: `${site}/api/payment/kakao/fail?order=${encodeURIComponent(params.partnerOrderId)}`,
   };

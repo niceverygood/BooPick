@@ -1,26 +1,33 @@
 // 카카오페이 결제 APPROVE (redirect callback)
 //
-// GET /api/payment/kakao/approve?type=<onetime|subscription>&order=<partner_order_id>&pg_token=<...>
+// GET /api/payment/kakao/approve?type=<subscription|onetime>&cycle=<monthly|yearly|onetime>&order=<order>&pg_token=<...>
 //
 // 흐름:
 //   1. pg_token + payments row(tid) 조회
 //   2. 카카오페이 approve API 호출
 //   3. payments status='approved' + 응답 저장
-//   4. 정기결제 첫 결제 시 subscriptions INSERT (sid)
-//   5. profiles.tier = 'pro' 자동 승격
+//   4. 정기결제 첫 결제 시 subscriptions INSERT (sid + next_charge_at = +1m or +1y)
+//   5. profiles.tier = 'pro' 자동 승격 (정기일 때만 — 단건은 별도 만료 정책 추후)
 //   6. 사용자를 /checkout/success 로 redirect
-//
-// 카카오페이가 이 URL 로 직접 redirect 하므로 GET 요청.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { approve, KakaoPayError, getSiteUrl } from "@/lib/kakaopay";
+import { nextChargeAt, type BillingCycle } from "@/lib/pricing";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const type = url.searchParams.get("type") === "subscription" ? "subscription" : "onetime";
+  const type =
+    url.searchParams.get("type") === "subscription" ? "subscription" : "onetime";
+  const cycleRaw = url.searchParams.get("cycle");
+  const cycle: BillingCycle =
+    cycleRaw === "monthly" || cycleRaw === "yearly" || cycleRaw === "onetime"
+      ? cycleRaw
+      : type === "subscription"
+      ? "monthly"
+      : "onetime";
   const partnerOrderId = url.searchParams.get("order") ?? "";
   const pgToken = url.searchParams.get("pg_token") ?? "";
 
@@ -50,7 +57,7 @@ export async function GET(req: NextRequest) {
     return failRedirect("결제 정보를 찾을 수 없습니다");
   }
 
-  // 2. 카카오 APPROVE 호출
+  // 2. 카카오 APPROVE
   let approveResp;
   try {
     approveResp = await approve({
@@ -84,16 +91,19 @@ export async function GET(req: NextRequest) {
     payment_method_type: approveResp.payment_method_type,
     vat_amount: approveResp.amount?.vat ?? null,
     approved_at: approveResp.approved_at,
-    raw_approve_response: approveResp as unknown as Record<string, unknown>,
+    raw_approve_response: { ...approveResp, _cycle: cycle } as unknown as Record<
+      string,
+      unknown
+    >,
   };
   if (approveResp.sid) {
     updates.sid = approveResp.sid;
   }
   await admin.from("payments").update(updates).eq("id", payment.id);
 
-  // 4. 정기결제 첫 결제면 subscriptions INSERT + tier=pro 승격
+  // 4. 정기결제 첫 결제 → subscriptions INSERT + tier=pro
   if (type === "subscription" && approveResp.sid) {
-    // 이미 존재하는 active 구독이 있으면 그것을 inactive 처리 (중복 방지)
+    // 기존 active 있으면 inactive (중복 방지)
     await admin
       .from("subscriptions")
       .update({
@@ -104,8 +114,7 @@ export async function GET(req: NextRequest) {
       .eq("user_id", payment.user_id)
       .eq("status", "active");
 
-    const next = new Date();
-    next.setMonth(next.getMonth() + 1);
+    const next = nextChargeAt(cycle);
 
     const { error: subErr } = await admin.from("subscriptions").insert({
       user_id: payment.user_id,
@@ -121,20 +130,17 @@ export async function GET(req: NextRequest) {
     if (subErr) {
       console.error("[payment/approve] subscription insert fail:", subErr.message);
     }
-  }
 
-  // 5. 결제 완료 시 Pro 활성 (정기든 단건이든 — 단건은 별도 정책 가능)
-  //    여기서는 둘 다 Pro 활성. 단건 만료 정책은 추후.
-  if (type === "subscription") {
+    // 결제 완료 시 Pro 활성
     await admin
       .from("profiles")
       .update({ tier: "pro" })
       .eq("id", payment.user_id);
   }
 
-  // 6. 사용자에게 success 페이지로 redirect
+  // 5. 사용자에게 success 페이지로 redirect
   return NextResponse.redirect(
-    `${site}/checkout/success?type=${type}&aid=${encodeURIComponent(approveResp.aid)}`,
+    `${site}/checkout/success?cycle=${cycle}&aid=${encodeURIComponent(approveResp.aid)}`,
     303
   );
 }
