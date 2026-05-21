@@ -11,7 +11,13 @@
 // DB 상태는 카카오 응답 확정 후에만 갱신 (#5).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { subscribe, getCid, KakaoPayError } from "@/lib/kakaopay";
+import {
+  subscribe,
+  getCid,
+  KakaoPayError,
+  type ApproveResponse,
+  type SubscribeParams,
+} from "@/lib/kakaopay";
 import { nextChargeAt, PRICING, type BillingCycle } from "@/lib/pricing";
 import {
   decideRetry,
@@ -55,6 +61,49 @@ export function kstDateKey(d: Date = new Date()): string {
 
 const ALIMTALK_TEMPLATE_RECEIPT = "PRO_RECEIPT"; // 승인 후 실 템플릿 ID 로 교체
 
+// ── 테스트 전용 mock (프로덕션에서는 절대 작동 안 함) ──
+//   KAKAOPAY_MOCK 환경변수로 실제 청구 없이 흐름 검증:
+//     "success"        → 가짜 승인 응답 (실결제 X) → charged
+//     "error:<CODE>"   → 해당 코드로 KakaoPayError throw (예: error:INSUFFICIENT_BALANCE)
+//   NODE_ENV='production' 이면 mock 무시 → 실제 subscribe() 만 호출.
+//   (Vercel 빌드는 프리뷰·프로덕션 모두 NODE_ENV=production → mock 영구 비활성.
+//    로컬 next dev / tsx 스크립트에서만 동작.)
+//   ※ 테스트 종료 후 이 블록은 제거 가능 (기능 영향 없음).
+async function doSubscribe(params: SubscribeParams): Promise<ApproveResponse> {
+  const mock = process.env.KAKAOPAY_MOCK;
+  const isProd = process.env.NODE_ENV === "production";
+  if (mock && !isProd) {
+    if (mock.startsWith("error:")) {
+      const code = mock.slice("error:".length) || "MOCK_ERROR";
+      throw new KakaoPayError(`[MOCK] ${code}`, code, 400);
+    }
+    if (mock === "success") {
+      const iso = new Date().toISOString();
+      return {
+        aid: `MOCK_AID_${Date.now()}`,
+        tid: `MOCK_TID_${Date.now()}`,
+        cid: getCid("subscription"),
+        sid: params.sid,
+        partner_order_id: params.partnerOrderId,
+        partner_user_id: params.partnerUserId,
+        payment_method_type: "MONEY",
+        item_name: params.itemName,
+        quantity: params.quantity ?? 1,
+        amount: {
+          total: params.totalAmount,
+          tax_free: params.taxFreeAmount ?? 0,
+          vat: Math.round(params.totalAmount / 11),
+          point: 0,
+          discount: 0,
+        },
+        created_at: iso,
+        approved_at: iso,
+      };
+    }
+  }
+  return subscribe(params);
+}
+
 export async function chargeSubscription(
   admin: SupabaseClient,
   sub: SubscriptionRow,
@@ -83,7 +132,7 @@ export async function chargeSubscription(
           item_name: itemName,
           total_amount: sub.amount_per_cycle,
           tax_free_amount: 0,
-          status: "pending",
+          status: "ready", // payments_status_check: ready→approved/failed
           idempotency_key: idempotencyKey,
         },
         { onConflict: "idempotency_key", ignoreDuplicates: true }
@@ -109,7 +158,7 @@ export async function chargeSubscription(
 
   // ── 2. 카카오페이 정기 차회 결제 ──
   try {
-    const resp = await subscribe({
+    const resp = await doSubscribe({
       sid: sub.sid,
       partnerOrderId,
       partnerUserId: sub.user_id,
