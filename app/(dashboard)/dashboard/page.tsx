@@ -5,6 +5,7 @@ import { Chip } from "@/components/brand";
 import { createClient } from "@/lib/supabase/server";
 import { DatasetRow } from "@/components/dataset-row";
 import { ProUpgradeButton } from "@/components/pro-upgrade-button";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import {
   getCurrentProfile,
   TIER_LIMITS,
@@ -95,6 +96,11 @@ export default async function DashboardHome() {
   const dateStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${WEEKDAYS[now.getDay()]}요일`;
   const firstName = profile?.name?.split(/[\s/]/)[0] ?? "사장";
 
+  // 온보딩 3단계 완료 상태
+  const hasDataset = datasetTotal > 0;
+  const hasReport = reportTotal > 0;
+  const hasPdf = reports.some((r) => !!r.pdf_url);
+
   return (
     <div className="space-y-7">
       {/* 인사말 + 새 분석 */}
@@ -112,6 +118,13 @@ export default async function DashboardHome() {
           <Link href="/dashboard/upload">+ 새 분석 시작</Link>
         </Button>
       </div>
+
+      {/* 온보딩 체크리스트 (신규 사용자 — 3단계 완료 시 자동 숨김) */}
+      <OnboardingChecklist
+        hasDataset={hasDataset}
+        hasReport={hasReport}
+        hasPdf={hasPdf}
+      />
 
       {/* KPI 행 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
