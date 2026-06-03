@@ -301,15 +301,15 @@ function SamplePreview() {
       <div className="p-6">
         <div className="flex items-center gap-2.5 mb-1 flex-wrap">
           <Chip tone="navy">사무실</Chip>
-          <Chip tone="neutral">의뢰: 강남 30평대 · 보증금 3,000만 / 월세 300만대</Chip>
+          <Chip tone="neutral">의뢰: 강남 30평대 · 보증금 4,000만 / 월세 300만대</Chip>
         </div>
         <div className="text-base font-bold text-navy-800 mt-1.5">
           강남구 역삼동 · 4층 · 32평 (전용 20평)
         </div>
         <div className="num text-[22px] font-extrabold mt-1 text-navy-800">
-          보증금 3,000만 / 월 320만
+          보증금 4,000만 / 월 320만
           <span className="text-xs font-medium text-slate-500 ml-1.5">
-            · 관리비 38만 별도
+            · 관리비 45만 별도
           </span>
         </div>
 
