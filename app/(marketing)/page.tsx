@@ -299,15 +299,18 @@ function SamplePreview() {
         </span>
       </div>
       <div className="p-6">
-        <div className="flex items-center gap-2.5 mb-1">
+        <div className="flex items-center gap-2.5 mb-1 flex-wrap">
           <Chip tone="navy">사무실</Chip>
-          <span className="num text-[11px] text-slate-500">2026.05.18</span>
+          <Chip tone="neutral">의뢰: 강남 30평대 · 보증금 3,000만 / 월세 300만대</Chip>
         </div>
-        <div className="text-base font-bold text-navy-800">
-          강남구 역삼동 · 7층 · 143평
+        <div className="text-base font-bold text-navy-800 mt-1.5">
+          강남구 역삼동 · 4층 · 32평 (전용 20평)
         </div>
-        <div className="num text-[22px] font-extrabold mt-1.5 text-navy-800">
-          보증금 12억 / 월 1,200만
+        <div className="num text-[22px] font-extrabold mt-1 text-navy-800">
+          보증금 3,000만 / 월 320만
+          <span className="text-xs font-medium text-slate-500 ml-1.5">
+            · 관리비 38만 별도
+          </span>
         </div>
 
         {/* 헤드라인 신호 */}
@@ -320,7 +323,7 @@ function SamplePreview() {
               적합
             </div>
             <div className="text-[15px] font-bold text-navy-800 mt-0.5 leading-snug">
-              종합 적합도 92점 — 면적·주차·연식 의뢰 조건 정확 부합
+              종합 적합도 92점 — 신축 5년 이내·자주식 3대·임대료 정확 부합
             </div>
           </div>
         </div>
@@ -328,9 +331,9 @@ function SamplePreview() {
         {/* 세부 신호 3개 */}
         <div className="grid grid-cols-3 gap-2 mt-4">
           {[
-            { l: "면적", level: "safe" as const, v: "적정" },
-            { l: "주차", level: "safe" as const, v: "우수" },
-            { l: "임대료", level: "warn" as const, v: "주의" },
+            { l: "면적", level: "safe" as const, v: "정확 부합" },
+            { l: "주차", level: "safe" as const, v: "자주식 3대" },
+            { l: "임대료", level: "safe" as const, v: "조건 부합" },
           ].map((c) => (
             <div
               key={c.l}
