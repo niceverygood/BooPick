@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/brand";
 import {
@@ -7,7 +8,34 @@ import {
   YEARLY_SAVINGS_WON,
 } from "@/lib/pricing";
 
-export default function Landing() {
+interface LandingProps {
+  searchParams?: {
+    code?: string;
+    next?: string;
+    error?: string;
+    error_description?: string;
+  };
+}
+
+export default function Landing({ searchParams }: LandingProps) {
+  // OAuth (카카오) redirect URI 가 잘못 설정돼 / 로 떨어진 경우 자동 정리
+  // — 카카오 개발자 콘솔에서 redirect_uri 를 /auth/callback 으로 고치는 게 정석이지만,
+  //   사용자가 이미 가입한 흔적(?code=)이 있으면 콜백 라우트로 우회 처리.
+  if (searchParams?.code) {
+    const next = searchParams.next ?? "/dashboard";
+    const cb = `/auth/callback?code=${encodeURIComponent(
+      searchParams.code
+    )}&next=${encodeURIComponent(next)}`;
+    redirect(cb);
+  }
+  // OAuth 에러도 콜백 라우트로 흘려보내 로그인 페이지에서 처리
+  if (searchParams?.error) {
+    const err = encodeURIComponent(searchParams.error);
+    const desc = searchParams.error_description
+      ? `&error_description=${encodeURIComponent(searchParams.error_description)}`
+      : "";
+    redirect(`/auth/callback?error=${err}${desc}`);
+  }
   return (
     <main className="bg-cream-100">
       {/* HERO */}

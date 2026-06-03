@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand";
+import { HeaderUserMenu } from "@/components/header-user-menu";
+import { getCurrentProfile } from "@/lib/tier-check";
 
-export default function MarketingLayout({
+export default async function MarketingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // 인증 상태 확인 — 로그인 사용자는 헤더에 사용자 메뉴 노출
+  const profile = await getCurrentProfile().catch(() => null);
+
   return (
     <div className="min-h-screen bg-cream-100">
       <header className="border-b border-[rgba(10,37,64,0.08)] bg-cream-100/85 backdrop-blur sticky top-0 z-20">
@@ -20,21 +25,40 @@ export default function MarketingLayout({
             >
               가격
             </Link>
-            <Link
-              href="/checkout"
-              className="hidden sm:inline px-2.5 py-1.5 text-slate-700 hover:text-brand-orange-600 font-medium"
-            >
-              Pro 구독
-            </Link>
-            <Link
-              href="/login"
-              className="bp-btn bp-btn-ghost bp-btn-md hidden sm:inline-flex"
-            >
-              로그인
-            </Link>
-            <Link href="/signup" className="bp-btn bp-btn-secondary bp-btn-md">
-              무료로 시작
-            </Link>
+            {profile ? (
+              <>
+                {/* 로그인 상태 — 대시보드 진입 + 사용자 메뉴 */}
+                <Link
+                  href="/dashboard"
+                  className="bp-btn bp-btn-primary bp-btn-md"
+                >
+                  대시보드 →
+                </Link>
+                <HeaderUserMenu email={profile.email} name={profile.name} />
+              </>
+            ) : (
+              <>
+                {/* 비로그인 — 로그인 / 가입 */}
+                <Link
+                  href="/checkout"
+                  className="hidden sm:inline px-2.5 py-1.5 text-slate-700 hover:text-brand-orange-600 font-medium"
+                >
+                  Pro 구독
+                </Link>
+                <Link
+                  href="/login"
+                  className="bp-btn bp-btn-ghost bp-btn-md hidden sm:inline-flex"
+                >
+                  로그인
+                </Link>
+                <Link
+                  href="/signup"
+                  className="bp-btn bp-btn-secondary bp-btn-md"
+                >
+                  무료로 시작
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
