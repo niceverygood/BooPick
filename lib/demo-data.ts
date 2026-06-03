@@ -13,7 +13,6 @@ import type { ListingRow } from "./scoring";
 import type { ParsedQuery } from "./parsed-query-types";
 
 const M2 = 3.3058;
-const py = (m2: number) => Math.round((m2 / M2) * 10) / 10;
 const m2 = (p: number) => Math.round(p * M2 * 10) / 10;
 
 function makeRow(
