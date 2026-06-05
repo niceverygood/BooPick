@@ -1,14 +1,15 @@
 {
   "name": "부픽 (BooPick)",
   "short_name": "부픽",
-  "description": "공인중개사 매물 데이터 분석 SaaS 도구 — 보유 매물을 업종 조건에 맞춰 분석하고 PDF 리포트로 출력",
+  "description": "공인중개사 매물 데이터 분석 SaaS 도구 — 보유 매물을 의뢰 조건에 맞춰 분석하고 PDF 리포트로 출력",
   "lang": "ko",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#FFF9F5",
-  "theme_color": "#1A2E4C",
+  "background_color": "#faf7f2",
+  "theme_color": "#0a2540",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/img/icon-192.png",
