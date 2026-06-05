@@ -1,5 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/api/generate-pdf/route.ts": {
+      "includeFiles": "node_modules/@sparticuz/chromium/**"
+    },
+    "app/api/admin/crawler/route.ts": {
+      "includeFiles": "node_modules/@sparticuz/chromium/**"
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/cleanup-datasets",
