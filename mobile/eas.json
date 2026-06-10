@@ -1,0 +1,27 @@
+{
+  "cli": { "version": ">= 12.0.0", "appVersionSource": "remote" },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": { "resourceClass": "m-medium" },
+      "android": { "buildType": "app-bundle" }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "PLACEHOLDER-APPLE-ID-EMAIL",
+        "ascAppId": "PLACEHOLDER-ASC-APP-ID",
+        "appleTeamId": "PLACEHOLDER-TEAM-ID"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./pc-api-service-account-key.json",
+        "track": "production"
+      }
+    }
+  }
+}
